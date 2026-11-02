@@ -389,3 +389,67 @@ def test_human_empty_lists_and_status(tool):
         assert any("mode unicast | mode broadcast" in ln for ln in status)
     finally:
         tool.cmd("proto text")
+
+
+def test_human_sentences_of_a_whole_session(setup):
+    """proto human over a whole session: every kind of event a tester follows reads as a
+    sentence (pairing, services, stream, volume, presets, microphone, balance, call, alert,
+    disconnection, broadcast)."""
+    ha, dut, addr = setup
+    ha.cmd("mode unicast")
+    ha.cmd("bonding create Phone")
+    raw_lines(ha, "proto human")
+    seen = []
+    try:
+        steps = [
+            (f"bonding connect Phone address={addr}", 4),
+            ("bonding pair Phone", 5),
+            ("le-source attach Phone", 1),
+            ("le-source music start preset=48_2 freq=440", 8),
+            ("le-source volume set 128", 3),
+            ("le-source preset next", 3),
+            ("le-source preset list", 3),
+            ("le-source mic mute on", 3),
+            ("le-source mic gain 5", 3),
+            ("le-source balance set 10", 3),
+            ("bonding phy Phone 1m", 3),
+            ("bonding param Phone interval=50", 4),
+            ("le-source call incoming name=John", 5),
+            ("le-source call accept", 6),
+            ("le-source call end", 6),
+            ("le-source alert ms=1000 freq=1500", 5),
+            ("bonding disconnect Phone", 4),
+        ]
+        for line, settle in steps:
+            seen += raw_lines(ha, line, settle=settle)
+        seen += raw_lines(ha, "mode broadcast", settle=3)
+        seen += raw_lines(ha, "broadcast 1 create name=Hall bis=1", settle=1)
+        seen += raw_lines(ha, "broadcast 1 start", settle=4)
+        seen += raw_lines(ha, "broadcast 1 stop", settle=3)
+    finally:
+        ha.cmd("proto text")
+
+    text = "\n".join(seen)
+    for sentence in (
+        "Connection established: Phone",
+        "Pairing completed",
+        "Services of Phone found: audio sink",
+        "Audio stream active: media, 48_2",
+        "Device volume 128/255 (50%)",
+        "Active preset",
+        "Microphone muted",
+        "Balance offset 10",
+        "PHY of Phone",
+        "Connection parameters of Phone",
+        "Call 1 incoming",
+        "Audio stream now ringtone",
+        "Call 1 ended",
+        "Phone disconnected",
+        "Mode: broadcast.",
+        'BIG 1 "Hall" active, 1 BIS.',
+        "BIG 1 stopped.",
+    ):
+        assert sentence in text, (sentence, text[-3000:])
+    # low-level events stay out of the non-verbose view
+    assert "bonding_mtu" not in text and "source_stream_started" not in text
+

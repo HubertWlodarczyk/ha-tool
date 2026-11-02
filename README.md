@@ -108,7 +108,7 @@ All of them are suitable for upstream submission.
 
 ```
 scripts/build.sh              # ha_tool + dut_sim for nrf5340bsim (host gcc, no Zephyr SDK)
-scripts/test.sh               # 111 tests in simulation, about 8 min (including the library tests)
+scripts/test.sh               # 120 tests in simulation, about 10 min (including the library tests)
 scripts/test.sh -m slow       # 11 long ones: fuzzing, soak, cycles, event storm, budget limit (about 12 min)
 scripts/test.sh -k phone      # selected tests
 HA_SIM_SPEED=2 scripts/test.sh   # simulation 2x faster than real time
@@ -488,7 +488,7 @@ Memory usage (`scripts/build.sh dk`):
 
 | Core | Flash | RAM |
 |---|---|---|
-| app (`ha_tool`) | 580 KB / 1 MB (57%), including 257 KB of frame table | 116 KB / 448 KB (25%) |
+| app (`ha_tool`) | 584 KB / 1 MB (57%), including 257 KB of frame table | 114 KB / 448 KB (25%) |
 | net (`hci_ipc` controller) | 164 KB / 256 KB (64%) | 59 KB / 64 KB (92%) |
 
 Hardware optimizations:
@@ -596,13 +596,13 @@ cannot see. Every defect found has a regression test and its own fix.
 
 | Tool | How to run | Result |
 |---|---|---|
-| ASan + UBSan in simulation | `scripts/build.sh sim --sanitize`, `HA_VARIANT=asan scripts/test.sh -m "slow or not slow"` | 119 tests (including the long ones): zero ASan/UBSan reports, all pass |
+| ASan + UBSan in simulation | `scripts/build.sh sim --sanitize`, `HA_VARIANT=asan scripts/test.sh -m "slow or not slow"` | 130 tests (including the long ones): zero ASan/UBSan reports, all pass |
 | Static analysis | `scripts/analyze.sh` (`gcc -fanalyzer`, `clang-tidy`, `.clang-tidy`) | 36 files, clean |
 | CLI fuzzing | `scripts/test.sh -m slow test_fuzz.py` (`HA_FUZZ_SEED`, `HA_FUZZ_LINES`) | 3 seeds × 2500 lines (text and JSON alternating) + a run on ASan: no invariant violations |
 | Specification conformance | automatically in every run (`tests/out/conformance.txt`) | every OK reply and every `ha_tool` event matches `protocol/hatool.yaml` |
-| Coverage | `scripts/build.sh sim --coverage`, `HA_VARIANT=cov scripts/test.sh -m "slow or not slow"`, `gcovr` → `build/coverage/` | `ha_tool` + `common`: 89.4% lines, 96.8% functions, 74.0% branches; 118 of 119 tests pass (see below) |
+| Coverage | `scripts/build.sh sim --coverage`, `HA_VARIANT=cov scripts/test.sh -m "slow or not slow"`, `gcovr` → `build/coverage/` | `ha_tool` + `common`: 90.1% lines, 97.3% functions, 74.6% branches; 131 of 131 tests pass |
 | Soak, cycles, event storm | `scripts/test.sh -m slow test_soak.py` (`HA_SOAK_S`, `HA_CYCLES`) | 300 s soak (9 BIS, a tone every second): zero loss; 200 + 100 cycles without leaks; storms of 16–1000 events counted exactly |
-| Libraries without a board | `pytest clients/python/tests`, `./gradlew test` (in `scripts/lint.sh`) | 18 + 11 tests against a fake board |
+| Libraries without a board | `pytest clients/python/tests`, `./gradlew test` (in `scripts/lint.sh`) | 19 + 16 tests against a fake board |
 
 Found and fixed:
 
@@ -639,11 +639,11 @@ Found and fixed:
 | Reply buffers in both libraries grew without bound | review during unit testing | memory grew throughout a long run |
 | `snprintf` in the JSON writer without a result check | `clang-tidy` | an out-of-bounds write on a formatting error |
 
-Final result: 3 × the full suite (108 tests) green, ASan with the long tests (119) green,
-`scripts/analyze.sh` and `scripts/lint.sh` clean, DK build without warnings: application 580 KB
-flash / 116 KB static RAM, net core 164 KB / 59 KB. In the coverage run 118 of 119 passed:
-`test_broadcast_txpower` failed once (the simulated hearing aid timed out on PA sync with two
-BIGs running), and passed 18 of 18 times when repeated alone in the regular and coverage builds.
+Final result: 3 × the full suite (120 tests) green, ASan with the long tests (130) green,
+coverage with the long tests (131) green, `scripts/analyze.sh` and `scripts/lint.sh` (with the
+Java client) clean, DK build without warnings: application 584 KB flash / 114 KB static RAM, net
+core 164 KB / 59 KB. The former flaky `test_broadcast_txpower` (the simulated hearing aid's own
+advertising, see the table) passed in every run.
 
 Optimization: the event queue was the largest object in RAM (11.9 KB: 32 slots sized for the
 longest line). A ring buffer with variable-length records takes 4 KB and holds more typical
