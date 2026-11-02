@@ -395,7 +395,7 @@ def test_human_sentences_of_a_whole_session(setup):
     """proto human over a whole session: every kind of event a tester follows reads as a
     sentence (pairing, services, stream, volume, presets, microphone, balance, call, alert,
     disconnection, broadcast)."""
-    ha, dut, addr = setup
+    ha, _, addr = setup
     ha.cmd("mode unicast")
     ha.cmd("bonding create Phone")
     raw_lines(ha, "proto human")
@@ -452,4 +452,3 @@ def test_human_sentences_of_a_whole_session(setup):
         assert sentence in text, (sentence, text[-3000:])
     # low-level events stay out of the non-verbose view
     assert "bonding_mtu" not in text and "source_stream_started" not in text
-
