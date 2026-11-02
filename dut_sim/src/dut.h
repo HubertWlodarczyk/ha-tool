@@ -74,6 +74,14 @@ int ctrl_init(void);
 void ctrl_on_secure(struct bt_conn *conn);
 void ctrl_on_disconnected(struct bt_conn *conn);
 
+/*
+ * Pauses connectable advertising while a broadcast's periodic advertising sync is established.
+ * The Zephyr controller lets the AUX event of its own advertising preempt the sync's receive
+ * window; with an advertising interval that divides the PA interval (30 ms vs. 60 ms, the BAP
+ * defaults) that happens at every PA event on an unlucky phase and the sync fails (0x3e).
+ */
+void dut_adv_hold(bool hold);
+
 int bsink_init(void);
 void bsink_reset(void);
 const char *bsink_state_str(void);

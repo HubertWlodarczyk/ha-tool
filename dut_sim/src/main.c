@@ -50,6 +50,7 @@ static const struct bt_data ad[] = {
 static struct bt_le_ext_adv *adv;
 static bool adv_enabled = true;
 static bool adv_restart; /* the set was ended by a connection */
+static bool adv_held;    /* paused while a periodic advertising sync is established */
 static struct bt_conn *conns[CONFIG_BT_MAX_CONN];
 
 static void adv_work_handler(struct k_work *work);
@@ -72,7 +73,7 @@ static void adv_work_handler(struct k_work *work)
 
 	ARG_UNUSED(work);
 
-	if (!adv_enabled || conn_count() >= CONFIG_BT_MAX_CONN) {
+	if (!adv_enabled || adv_held || conn_count() >= CONFIG_BT_MAX_CONN) {
 		(void)bt_le_ext_adv_stop(adv);
 		return;
 	}
@@ -89,6 +90,14 @@ static void adv_work_handler(struct k_work *work)
 	err = bt_le_ext_adv_start(adv, BT_LE_EXT_ADV_START_DEFAULT);
 	if (err != 0 && err != -EALREADY) {
 		LOG_WRN("Advertising start failed: %d", err);
+	}
+}
+
+void dut_adv_hold(bool hold)
+{
+	if (hold != adv_held) {
+		adv_held = hold;
+		k_work_submit(&adv_work);
 	}
 }
 

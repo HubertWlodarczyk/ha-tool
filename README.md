@@ -540,6 +540,11 @@ Notes:
   links ends with `-ENOMEM`, so `dut_sim` does them sequentially.
 - An incoming call that started before the CCP subscription has to be read after discovery. A
   good test case for real hearing aids.
+- **A sink's own advertising vs. PA sync:** in the Zephyr controller the AUX event of a sink's own
+  connectable advertising preempts the receive window of a periodic advertising sync being
+  established. With BAP default intervals (advertising 20–30 ms, PA 60 ms) the phase can stay
+  bad and the sync fails every time (`0x3e`). Worth checking on real hearing aids that
+  advertise while looking for a broadcast.
 - **Several subgroups in the BASE:** a broadcast sink in Zephyr's default configuration
   (1 subgroup) **silently ignores** a BASE with more subgroups: BIGInfo arrives, the BASE does
   not. Worth checking how real hearing aids react to a multilingual broadcast.
@@ -603,6 +608,9 @@ Found and fixed:
 |---|---|---|
 | The controller placed a new BIG on a running one (patch 0006) | ASan changed the timing and hit the bad phase | both BIGs lost 50% of frames, depending on the start moment (also on the DK) |
 | The controller placed a PA train and AUX set on a running BIG, and a receiver holding the PA could not keep up (patch 0006, extended) | final ASan run: `test_started_big_never_overlaps_running_one` and `test_most_bises`; radio dumps (`scripts/airtime.py`) | a BIG lost 8–17% of frames or the broadcast could not be found, depending on the start moment; the old budget only masked it |
+| The simulated hearing aid's own advertising preempted its PA sync (`dut_sim`) | a flaky `test_broadcast_txpower` (1 failure in the coverage run, PA sync retries in 2 of 10 runs); radio dumps: the sink synced to every PA packet and aborted it 45 µs later, each time its own AUX_ADV_IND followed 846 µs after the PA | its advertising interval (30 ms) divides the PA interval (60 ms), so on an unlucky start the phase never moved and the sync failed (`0x3e`); test double only: it now pauses advertising while establishing the sync, 0 retries in 30 runs |
+| The simulated hearing aid leaked its broadcast sink on `bcast stop` (`dut_sim`) | a warning while debugging the above (`Failed to add sync as Receive State: -12`) | stopping a synced BIG is asynchronous, so the immediate delete failed and the BASS receive state stayed taken; now deleted after the `stopped` callback |
+| Ringtone / beep pattern after 71 minutes of streaming | review | `frame_count * frame_us` overflowed 32 bits and the on/off timing jumped |
 | Two shell errors for one line (patch 0009) | fuzzer after the CLI change (`"bcast " * 60` stopped being a known command) | client replies shifted by one command |
 | `le-source status` printed `preset=(null)` when idle | fuzzer | a value outside the specification |
 | `next_big_bis` ignored the limit of 3 BIGs and 16 BIS | the new budget (with 3 BIGs airtime was left over) | `broadcast budget` promised BISes that could not be started |

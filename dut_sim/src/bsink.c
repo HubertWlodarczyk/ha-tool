@@ -54,6 +54,8 @@ static struct {
 	char name[NAME_LEN];
 	struct bt_le_per_adv_sync *pa_sync;
 	struct bt_bap_broadcast_sink *sink;
+	/* Stopped but still streaming: deleted once its BIG has stopped (stale_work) */
+	struct bt_bap_broadcast_sink *stale;
 	uint32_t bis_indexes;
 	bool base_received;
 	bool biginfo_received;
@@ -196,8 +198,10 @@ static void scan_recv(const struct bt_le_scan_recv_info *info, struct net_buf_si
 	param.sid = info->sid;
 	param.skip = 0;
 	param.timeout = 1000; /* 10 s */
+	dut_adv_hold(true);
 	err = bt_le_per_adv_sync_create(&param, &bs.pa_sync);
 	if (err != 0) {
+		dut_adv_hold(false);
 		cli_evt("dut_bcast_error", "reason=pa_sync_create err=%d", err);
 		bs.state = ST_IDLE;
 		return;
@@ -225,6 +229,7 @@ static void pa_synced(struct bt_le_per_adv_sync *sync, struct bt_le_per_adv_sync
 	}
 
 	bs.state = ST_PA_SYNCED;
+	dut_adv_hold(false);
 	cli_evt("dut_bcast_pa_synced", "broadcast_id=0x%06X", bs.broadcast_id);
 
 	err = bt_bap_broadcast_sink_create(sync, bs.broadcast_id, &bs.sink);
@@ -250,6 +255,7 @@ static void pa_term(struct bt_le_per_adv_sync *sync,
 			return;
 		}
 
+		dut_adv_hold(false);
 		cli_evt("dut_bcast_error", "reason=pa_sync_failed hci=0x%02x tries=%u",
 			info->reason, bs.pa_tries);
 		bs.state = ST_IDLE;
@@ -345,9 +351,60 @@ static void sink_started(struct bt_bap_broadcast_sink *sink)
 	ARG_UNUSED(sink);
 }
 
+static bool collect_src_id(const struct bt_bap_scan_delegator_recv_state *state, void *user_data)
+{
+	struct {
+		uint8_t ids[CONFIG_BT_BAP_SCAN_DELEGATOR_RECV_STATE_COUNT];
+		size_t n;
+	} *c = user_data;
+
+	if (c->n < ARRAY_SIZE(c->ids)) {
+		c->ids[c->n++] = state->src_id;
+	}
+
+	return false;
+}
+
+/* Deleting a sink keeps the BASS receive state it added; without this the next sink finds no
+ * free one ("Failed to add sync as Receive State: -12")
+ */
+static void release_recv_states(void)
+{
+	struct {
+		uint8_t ids[CONFIG_BT_BAP_SCAN_DELEGATOR_RECV_STATE_COUNT];
+		size_t n;
+	} c = {.n = 0};
+
+	bt_bap_scan_delegator_foreach_state(collect_src_id, &c);
+	for (size_t i = 0; i < c.n; i++) {
+		uint32_t no_bis[BT_BAP_BASS_MAX_SUBGROUPS] = {0};
+
+		/* A state still marked synced cannot be removed */
+		(void)bt_bap_scan_delegator_set_bis_sync_state(c.ids[i], no_bis);
+		(void)bt_bap_scan_delegator_set_pa_state(c.ids[i], BT_BAP_PA_STATE_NOT_SYNCED);
+		(void)bt_bap_scan_delegator_rem_src(c.ids[i]);
+	}
+}
+
+/* Outside the sink's callback, which is still iterating its listeners */
+static void stale_delete(struct k_work *work)
+{
+	ARG_UNUSED(work);
+
+	if (bs.stale != NULL && bt_bap_broadcast_sink_delete(bs.stale) == 0) {
+		bs.stale = NULL;
+		release_recv_states();
+	}
+}
+
+static K_WORK_DEFINE(stale_work, stale_delete);
+
 static void sink_stopped(struct bt_bap_broadcast_sink *sink, uint8_t reason)
 {
-	ARG_UNUSED(sink);
+	if (sink == bs.stale) {
+		(void)k_work_submit(&stale_work);
+		return;
+	}
 
 	cli_evt("dut_bcast_stopped", "reason=0x%02x%s", reason,
 		reason == BT_HCI_ERR_TERM_DUE_TO_MIC_FAIL ? " cause=wrong_code" : "");
@@ -448,8 +505,15 @@ void bsink_reset(void)
 	}
 
 	if (bs.sink != NULL) {
+		/* Stopping a synced BIG is asynchronous: the sink can only be deleted (which also
+		 * frees its BASS receive state) after its `stopped` callback.
+		 */
 		(void)bt_bap_broadcast_sink_stop(bs.sink);
-		(void)bt_bap_broadcast_sink_delete(bs.sink);
+		if (bt_bap_broadcast_sink_delete(bs.sink) != 0) {
+			bs.stale = bs.sink;
+		} else {
+			release_recv_states();
+		}
 		bs.sink = NULL;
 	}
 
@@ -458,6 +522,7 @@ void bsink_reset(void)
 		bs.pa_sync = NULL;
 	}
 
+	dut_adv_hold(false);
 	bs.state = ST_IDLE;
 	bs.base_received = false;
 	bs.biginfo_received = false;

@@ -208,7 +208,9 @@ static struct tx_slot *find_slot(const struct bt_cap_stream *stream)
 
 static bool tone_on(const struct tx_slot *slot)
 {
-	const uint32_t t_ms = (slot->frame_count * slot->cfg->frame_us) / 1000U;
+	/* 64 bit: frame_count * frame_us passes 2^32 after 71 minutes of 10 ms frames */
+	const uint32_t t_ms =
+		(uint32_t)(((uint64_t)slot->frame_count * slot->cfg->frame_us) / 1000U);
 
 	switch (slot->tone.pattern) {
 	case TONE_RING:
