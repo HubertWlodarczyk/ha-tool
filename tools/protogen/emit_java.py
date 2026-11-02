@@ -234,6 +234,8 @@ def _group(node: Node, cls: str, files: dict[str, str]) -> None:
         code.line()
         if root:
             code.javadoc("Creates the command groups.")
+            # The groups only keep the reference; nothing is sent before the subclass is built
+            code.line('@SuppressWarnings("this-escape")')
             ctor = f"protected {cls}() {{"
         else:
             code.javadoc("Commands sent through t.")

@@ -22,6 +22,7 @@ public abstract class RootCommands {
     private final BroadcastCommands broadcast;
 
     /** Creates the command groups. */
+    @SuppressWarnings("this-escape")
     protected RootCommands() {
         bonding = new BondingCommands(this);
         leSource = new LeSourceCommands(this);

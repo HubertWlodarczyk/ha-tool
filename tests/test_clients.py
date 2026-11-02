@@ -102,7 +102,7 @@ def test_python_client(board, transport, client_log):
 def java_home() -> str | None:
     if os.environ.get("JAVA_HOME"):
         return os.environ["JAVA_HOME"]
-    local = sorted(pathlib.Path.home().glob(".local/opt/jdk-17*"))
+    local = sorted(pathlib.Path.home().glob(".local/opt/jdk-*"))
     if local:
         return str(local[-1])
     java = shutil.which("java")
@@ -113,7 +113,7 @@ def test_java_client(request):
     """clients/java: ./gradlew test with its SimulationTest against the board over TCP."""
     home = java_home()
     if home is None:
-        pytest.skip("no JDK (JAVA_HOME, ~/.local/opt/jdk-17*, java on PATH)")
+        pytest.skip("no JDK (JAVA_HOME, ~/.local/opt/jdk-*, java on PATH)")
     out = OUT / request.node.name
     sim = Sim(out)
     try:

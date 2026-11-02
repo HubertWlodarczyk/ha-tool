@@ -7,6 +7,7 @@
 package io.hatool;
 
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 /** A command answered ERR (or the shell rejected it). */
@@ -16,7 +17,8 @@ public class HaToolException extends RuntimeException {
     private final String command;
     private final int errno;
     private final String msg;
-    private final Map<String, String> fields;
+    /* A serializable copy (the exception is Serializable) */
+    private final LinkedHashMap<String, String> fields;
 
     /**
      * Creates the exception of a failed command.
@@ -31,7 +33,7 @@ public class HaToolException extends RuntimeException {
         this.command = command;
         this.errno = errno;
         this.msg = msg;
-        this.fields = Collections.unmodifiableMap(fields);
+        this.fields = new LinkedHashMap<>(fields);
     }
 
     /** The command line that failed */
@@ -50,6 +52,6 @@ public class HaToolException extends RuntimeException {
 
     /** key=value parts of the error, e.g. key, cmd, allowed for an unknown key */
     public Map<String, String> fields() {
-        return fields;
+        return Collections.unmodifiableMap(fields);
     }
 }
