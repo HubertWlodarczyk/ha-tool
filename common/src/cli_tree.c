@@ -135,10 +135,15 @@ static int check_keys(const struct shell *sh, const struct cli_cmd *cmd, size_t 
 			size_t pos = 0;
 
 			list[0] = '\0';
-			for (const char *const *k = cmd->keys;
-			     k != NULL && *k != NULL && pos + 20 < sizeof(list); k++) {
-				pos += snprintf(&list[pos], sizeof(list) - pos, "%s%s",
-						pos > 0 ? "," : "", *k);
+			for (const char *const *k = cmd->keys; k != NULL && *k != NULL; k++) {
+				const int n = snprintf(&list[pos], sizeof(list) - pos, "%s%s",
+						       pos > 0 ? "," : "", *k);
+
+				if (n < 0 || (size_t)n >= sizeof(list) - pos) {
+					list[pos] = '\0'; /* whole keys only */
+					break;
+				}
+				pos += n;
 			}
 
 			return cli_err(sh, -EINVAL, "unknown key key=%.*s cmd=%s allowed=%s",
@@ -246,6 +251,34 @@ static size_t valid_prefix(size_t argc, char **argv)
 	return best;
 }
 
+/* A command path as the user writes it: {big} shown as <big> */
+static void path_display(const char *path, char *buf, size_t len)
+{
+	size_t o = 0;
+
+	for (; *path != '\0' && o + 1 < len; path++) {
+		buf[o++] = *path == '{' ? '<' : (*path == '}' ? '>' : *path);
+	}
+
+	buf[o] = '\0';
+}
+
+static void line_str(size_t argc, char **argv, char *buf, size_t len)
+{
+	size_t pos = 0;
+
+	buf[0] = '\0';
+	for (size_t i = 0; i < argc && pos < len; i++) {
+		const int n = snprintf(&buf[pos], len - pos, "%s%s", i > 0 ? " " : "", argv[i]);
+
+		if (n < 0) {
+			break;
+		}
+
+		pos += n;
+	}
+}
+
 /*
  * Commands to suggest for a line that matches none: those continuing the valid prefix with a word
  * close to the wrong one (or every continuation if none is close), as "path usage; ...".
@@ -258,6 +291,23 @@ static void suggest(size_t argc, char **argv, char *buf, size_t len)
 	int found = 0;
 
 	buf[0] = '\0';
+
+	/* Two words swapped ("bonding 7 show"): suggest the line in the right order */
+	if (wrong != NULL && depth + 1 < argc && argc <= PATH_WORDS_MAX * 2) {
+		char *swapped[PATH_WORDS_MAX * 2];
+
+		for (size_t i = 0; i < argc; i++) {
+			swapped[i] = argv[i];
+		}
+		swapped[depth] = argv[depth + 1];
+		swapped[depth + 1] = argv[depth];
+		/* the next word is a command word here; the misplaced one becomes its argument */
+		if (valid_prefix(argc, swapped) > depth) {
+			line_str(argc, swapped, buf, len);
+			return;
+		}
+	}
+
 	for (int pass = 0; pass < 2 && found == 0; pass++) {
 		for (size_t c = 0; c < cli_cmds_count && found < HINTS_MAX; c++) {
 			const struct cli_cmd *cmd = &cli_cmds[c];
@@ -285,9 +335,12 @@ static void suggest(size_t argc, char **argv, char *buf, size_t len)
 
 			/* the usage only if short: the hint is meant to be read at a glance */
 			const bool with_usage = cmd->usage[0] != '\0' && strlen(cmd->usage) <= 24;
-			const int n = snprintf(&buf[pos], len - pos, "%s%s%s%s",
-					       found > 0 ? "; " : "", cmd->path,
-					       with_usage ? " " : "", with_usage ? cmd->usage : "");
+			char shown[48];
+			int n;
+
+			path_display(cmd->path, shown, sizeof(shown));
+			n = snprintf(&buf[pos], len - pos, "%s%s%s%s", found > 0 ? "; " : "", shown,
+				     with_usage ? " " : "", with_usage ? cmd->usage : "");
 
 			if (n < 0 || (size_t)n >= len - pos) {
 				buf[pos] = '\0';
@@ -297,34 +350,6 @@ static void suggest(size_t argc, char **argv, char *buf, size_t len)
 			pos += n;
 			found++;
 		}
-	}
-}
-
-/* A command path as the user writes it: {big} shown as <big> */
-static void path_display(const char *path, char *buf, size_t len)
-{
-	size_t o = 0;
-
-	for (; *path != '\0' && o + 1 < len; path++) {
-		buf[o++] = *path == '{' ? '<' : (*path == '}' ? '>' : *path);
-	}
-
-	buf[o] = '\0';
-}
-
-static void line_str(size_t argc, char **argv, char *buf, size_t len)
-{
-	size_t pos = 0;
-
-	buf[0] = '\0';
-	for (size_t i = 0; i < argc && pos < len; i++) {
-		const int n = snprintf(&buf[pos], len - pos, "%s%s", i > 0 ? " " : "", argv[i]);
-
-		if (n < 0) {
-			break;
-		}
-
-		pos += n;
 	}
 }
 
@@ -435,6 +460,18 @@ static bool prefix_match(const struct cli_cmd *cmd, size_t argc, char **argv)
 
 	for (size_t i = 0; i < argc; i++) {
 		p = path_word(p, &len);
+		if (p != NULL && is_target(p, len) && !word_eq(p, len, argv[i])) {
+			/* "help broadcast bis add": the target ({big}) may be left out */
+			size_t next_len;
+			const char *next = path_word(p + len, &next_len);
+
+			if (next != NULL && !is_target(next, next_len) &&
+			    word_eq(next, next_len, argv[i])) {
+				p = next;
+				len = next_len;
+			}
+		}
+
 		if (p == NULL || !(is_target(p, len) || word_eq(p, len, argv[i]))) {
 			return false;
 		}

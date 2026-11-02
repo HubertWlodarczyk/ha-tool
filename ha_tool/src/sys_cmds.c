@@ -151,6 +151,28 @@ int cmd_status(const struct shell *sh, size_t argc, char **argv)
 			 cs.evt_dropped);
 	}
 
+	if (cli_proto_get() == CLI_PROTO_HUMAN) {
+		/* Layer by layer, as a tester reads it; the OK line below keeps every field */
+		shell_print(sh, "Mode:        %s", mode_name(mode));
+		if (mode == MODE_UNICAST) {
+			shell_print(sh, "Identities:  %u (%u connected)", dev_count(),
+				    dev_conn_count());
+			shell_print(sh, "le-source:   %s, identity %s", phone_state_str(), ds.name);
+			if (strcmp(ds.name, "none") != 0) {
+				shell_print(sh, "  device:    %s",
+					    strcmp(ds.peer_name, "none") != 0 ? ds.peer_name
+									      : ds.peer);
+				shell_print(sh, "  link:      %s, %s, bond %s", ds.connection,
+					    ds.security, ds.bond);
+			}
+		} else if (mode == MODE_BROADCAST) {
+			shell_print(sh, "Broadcasts:  %d active of %d configured", active,
+				    configured);
+		} else {
+			shell_print(sh, "Next:        mode unicast | mode broadcast");
+		}
+	}
+
 	cli_ok(sh,
 	       "mode=%s identity=%s device=%s device_name=%s connection=%s security=%s bond=%s "
 	       "source=%s broadcasts_active=%d broadcasts_configured=%d%s",
@@ -347,7 +369,7 @@ int cmd_cli_burst(const struct shell *sh, size_t argc, char **argv)
 	return 0;
 }
 
-/* Commands with their accepted keys (CLI_KEYS), for the protocol consistency test */
+/* Commands with their accepted keys (from the specification), for the conformance test */
 int cmd_cli_spec(const struct shell *sh, size_t argc, char **argv)
 {
 	ARG_UNUSED(argc);

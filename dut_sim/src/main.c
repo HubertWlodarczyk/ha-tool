@@ -52,6 +52,20 @@ static bool adv_enabled = true;
 static bool adv_restart; /* the set was ended by a connection */
 static bool adv_held;    /* paused while a periodic advertising sync is established */
 static struct bt_conn *conns[CONFIG_BT_MAX_CONN];
+/* conns[] changes in the Bluetooth RX thread (connected / disconnected) */
+static struct k_spinlock conns_lock;
+
+/* A reference to link i for a shell command, NULL if none; the caller unrefs it */
+static struct bt_conn *conn_get(size_t i)
+{
+	struct bt_conn *conn = NULL;
+
+	K_SPINLOCK(&conns_lock) {
+		conn = conns[i] != NULL ? bt_conn_ref(conns[i]) : NULL;
+	}
+
+	return conn;
+}
 
 static void adv_work_handler(struct k_work *work);
 static K_WORK_DEFINE(adv_work, adv_work_handler);
@@ -112,8 +126,16 @@ static void connected(struct bt_conn *conn, uint8_t err)
 	}
 
 	for (size_t i = 0; i < ARRAY_SIZE(conns); i++) {
-		if (conns[i] == NULL) {
-			conns[i] = bt_conn_ref(conn);
+		bool stored = false;
+
+		K_SPINLOCK(&conns_lock) {
+			if (conns[i] == NULL) {
+				conns[i] = bt_conn_ref(conn);
+				stored = true;
+			}
+		}
+
+		if (stored) {
 			break;
 		}
 	}
@@ -130,9 +152,17 @@ static void disconnected(struct bt_conn *conn, uint8_t reason)
 	char peer[CLI_ADDR_STR_LEN];
 
 	for (size_t i = 0; i < ARRAY_SIZE(conns); i++) {
-		if (conns[i] == conn) {
-			bt_conn_unref(conns[i]);
-			conns[i] = NULL;
+		struct bt_conn *gone = NULL;
+
+		K_SPINLOCK(&conns_lock) {
+			if (conns[i] == conn) {
+				gone = conns[i];
+				conns[i] = NULL;
+			}
+		}
+
+		if (gone != NULL) {
+			bt_conn_unref(gone);
 		}
 	}
 
@@ -315,9 +345,12 @@ static int cmd_rssi(const struct shell *sh, size_t argc, char **argv)
 	ARG_UNUSED(argv);
 
 	for (size_t i = 0; i < ARRAY_SIZE(conns); i++) {
-		if (conns[i] != NULL) {
-			cli_addr_str(bt_conn_get_dst(conns[i]), addr, sizeof(addr));
-			cli_line(sh, "LINK peer=%s rssi=%d", addr, hci_read_rssi(conns[i]));
+		struct bt_conn *conn = conn_get(i);
+
+		if (conn != NULL) {
+			cli_addr_str(bt_conn_get_dst(conn), addr, sizeof(addr));
+			cli_line(sh, "LINK peer=%s rssi=%d", addr, hci_read_rssi(conn));
+			bt_conn_unref(conn);
 			n++;
 		}
 	}
@@ -348,8 +381,11 @@ static int cmd_disconnect(const struct shell *sh, size_t argc, char **argv)
 	ARG_UNUSED(argv);
 
 	for (size_t i = 0; i < ARRAY_SIZE(conns); i++) {
-		if (conns[i] != NULL) {
-			(void)bt_conn_disconnect(conns[i], BT_HCI_ERR_REMOTE_USER_TERM_CONN);
+		struct bt_conn *conn = conn_get(i);
+
+		if (conn != NULL) {
+			(void)bt_conn_disconnect(conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
+			bt_conn_unref(conn);
 		}
 	}
 
@@ -368,7 +404,9 @@ static int cmd_conn_param(const struct shell *sh, size_t argc, char **argv)
 	struct bt_le_conn_param param;
 	int sent = 0;
 
-	if (err != 0 || (interval * 4) % 5 != 0 || sto % 10 != 0) {
+	/* Core spec ranges: interval 7.5 ms..4 s, latency 0..499, timeout 100 ms..32 s */
+	if (err != 0 || (interval * 4) % 5 != 0 || sto % 10 != 0 || interval * 4 < 30 ||
+	    interval > 4000 || latency < 0 || latency > 499 || sto < 100 || sto > 32000) {
 		return cli_err(sh, -EINVAL,
 			       "interval=<ms, 1.25 steps> latency=<n> sto=<ms, 10 steps>");
 	}
@@ -377,8 +415,11 @@ static int cmd_conn_param(const struct shell *sh, size_t argc, char **argv)
 	param.latency = latency;
 	param.timeout = sto / 10;
 	for (size_t i = 0; i < ARRAY_SIZE(conns); i++) {
-		if (conns[i] != NULL && bt_conn_le_param_update(conns[i], &param) == 0) {
-			sent++;
+		struct bt_conn *conn = conn_get(i);
+
+		if (conn != NULL) {
+			sent += bt_conn_le_param_update(conn, &param) == 0;
+			bt_conn_unref(conn);
 		}
 	}
 

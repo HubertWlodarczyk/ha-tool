@@ -82,6 +82,7 @@ int cmd_bonding_create(const struct shell *sh, size_t argc, char **argv)
 	int io = IO_NONE;
 	bt_addr_le_t addr;
 	char addr_str[CLI_ADDR_STR_LEN];
+	char auto_name[NAME_LEN];
 	int id = -ENOMEM;
 
 	if (io_arg != NULL) {
@@ -138,7 +139,13 @@ int cmd_bonding_create(const struct shell *sh, size_t argc, char **argv)
 	if (name != NULL) {
 		snprintf(vdevs[id].name, sizeof(vdevs[id].name), "%s", name);
 	} else {
-		snprintf(vdevs[id].name, sizeof(vdevs[id].name), "identity%d", id);
+		/* identity<id>, or identity<id>-2, -3 ... if the tester already took that name */
+		vdevs[id].name[0] = '\0';
+		snprintf(auto_name, sizeof(auto_name), "identity%u", (uint8_t)id);
+		for (unsigned int k = 2; vdev_find(auto_name) > 0; k++) {
+			snprintf(auto_name, sizeof(auto_name), "identity%u-%u", (uint8_t)id, k);
+		}
+		snprintf(vdevs[id].name, sizeof(vdevs[id].name), "%s", auto_name);
 	}
 
 	vdevs[id].io = io;
@@ -159,8 +166,12 @@ int cmd_bonding_list(const struct shell *sh, size_t argc, char **argv)
 	ARG_UNUSED(argv);
 
 	if (human) {
-		shell_print(sh, "%-3s %-16s %-13s %-30s %-12s %-8s %s", "ID", "NAME", "CONNECTION",
-			    "DEVICE", "SECURITY", "BOND", "SOURCE");
+		if (dev_count() == 0) {
+			shell_print(sh, "No identities yet. Create one: bonding create <name>");
+		} else {
+			shell_print(sh, "%-3s %-16s %-13s %-30s %-12s %-8s %s", "ID", "NAME",
+				    "CONNECTION", "DEVICE", "SECURITY", "BOND", "SOURCE");
+		}
 	}
 
 	for (uint8_t id = 1; id < ARRAY_SIZE(vdevs); id++) {

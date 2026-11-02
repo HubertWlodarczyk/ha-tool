@@ -257,17 +257,31 @@ def test_bulk_operations_report_each_big(pair):
     assert results == {"1": "started", "2": "started", "3": "failed"}
     assert rep.errno == -7 and "2 of 3" in rep.raw  # -E2BIG of BIG 3
     heavy = next(d for d in rep.data if d["big"] == "3")
-    assert "budget" in heavy["reason"]
+    assert "not enough air time" in heavy["reason"]
     assert ha.cmd("broadcast 3 show")["state"] == "error"
     pct = ha.cmd("broadcast budget")
     assert float(pct["used_pct"]) > 0 and len(pct.data) == 2
 
     ha.cmd("broadcast 3 delete")
     rep = ha.cmd("broadcast start --all")  # both already active: nothing to do, no failure
-    assert rep["started"] == "2" and {d["result"] for d in rep.data} == {"active"}
+    assert rep["started"] == "0" and {d["result"] for d in rep.data} == {"active"}
     assert ha.cmd("broadcast restart --all")["restarted"] == "2"
     rep = ha.cmd("broadcast stop --all")
     assert rep["stopped"] == "2" and {d["result"] for d in rep.data} == {"stopped"}
+    ha.cmd("broadcast 1 start")
+    rep = ha.cmd("broadcast stop --all")  # only what was running counts as stopped
+    assert rep["count"] == "2" and rep["stopped"] == "1"
+    assert sorted(d["result"] for d in rep.data) == ["inactive", "stopped"]
+
+
+def test_several_failures_are_all_named(pair):
+    """start --all with two failing BIGs names both, not only the first."""
+    ha, _ = pair
+    ha.cmd("broadcast 1 create name=Ok bis=1")
+    ha.cmd("broadcast 2 create name=Empty")
+    ha.cmd("broadcast 3 create name=Empty2")
+    rep = ha.cmd("broadcast start --all", check=False)
+    assert rep.errno == -22 and "1 of 3 BIGs started, BIGs 2, 3 failed" in rep.raw
 
 
 def test_broadcast_errors_name_the_next_step(pair):
@@ -299,7 +313,7 @@ def test_human_views(pair):
         assert any(ln.split()[:3] == ["BIG", "NAME", "STATE"] for ln in table)
         assert any(ln.split()[:3] == ["1", "Tree", "ready"] for ln in table)
         tree = raw_lines(ha, "broadcast 1 show", settle=2)
-        assert any("Subgroup 1: 24_2 pol" in ln for ln in tree)
+        assert any("Subgroup 1: 24_2, media, language pol" in ln for ln in tree)
         assert any("BIS 2: right" in ln for ln in tree)
     finally:
         ha.cmd("proto text")
@@ -313,7 +327,8 @@ def test_human_events_are_sentences(setup):
     raw_lines(ha, "proto human")
     try:
         lines = raw_lines(ha, f"bonding connect Phone address={addr}", settle=4)
-        assert any(ln.startswith(f"Connection established: Phone with {addr}") for ln in lines)
+        # (the first line after the reply may carry the shell prompt)
+        assert any(f"Connection established: Phone with {addr}" in ln for ln in lines)
         # described events replace their EVT line; the others stay raw
         assert not any("bonding_connected" in ln for ln in lines)
         raw_lines(ha, "proto human --verbose")
@@ -323,3 +338,54 @@ def test_human_events_are_sentences(setup):
     finally:
         ha.cmd("proto text")
     assert ha.events_named("bonding_paired")  # the text protocol still sees the events
+
+
+def test_help_and_hints_guide_the_typing(tool):
+    """help finds a command without its BIG number, a swapped word order gets the right line,
+    hints show targets as <big>, and an impossible request is refused at once."""
+    assert tool.cmd("help broadcast bis add")["commands"] == "1"
+    tool.cmd("mode unicast")
+    tool.cmd("bonding create Phone")
+    rep = tool.cmd("bonding Phone show", check=False)
+    assert rep.errno == -22 and rep.values["hint"] == "bonding show Phone"
+    rep = tool.cmd("broadcast 1 bis ad", check=False)
+    assert "{big}" not in rep.raw
+    tool.cmd("le-source attach Phone")
+    rep = tool.cmd("le-source call end", check=False)  # no call
+    assert rep.errno == -1 and rep.values["hint"] == "le-source status"
+
+
+def test_automatic_names_stay_unique(tool):
+    """A default name never collides with one the tester chose."""
+    tool.cmd("mode unicast")
+    first = tool.cmd("bonding create identity2")  # takes the name the next default would get
+    second = tool.cmd("bonding create")
+    assert first["id"] == "1" and second["id"] == "2"
+    assert second["name"] == "identity2-2"
+
+
+def test_authenticated_pairing_needs_io(setup):
+    """sec=3/4 with io=none cannot work: the error says why and what to change."""
+    ha, _, addr = setup
+    ha.cmd("mode unicast")
+    ha.cmd("bonding create Phone")
+    ha.cmd(f"bonding connect Phone address={addr}")
+    ha.wait_evt("bonding_connected", timeout=20)
+    rep = ha.cmd("bonding pair Phone sec=4", check=False)
+    assert rep.errno == -22 and "io=none" in rep.raw
+    assert rep.values["hint"] == "bonding pair Phone sec=2; bonding io Phone kbd_display"
+
+
+def test_human_empty_lists_and_status(tool):
+    """proto human: an empty list says how to start, status is shown layer by layer."""
+    raw_lines(tool, "proto human")
+    try:
+        lines = raw_lines(tool, "bonding list", settle=2)
+        assert any("bonding create <name>" in ln for ln in lines)
+        lines = raw_lines(tool, "broadcast list", settle=2)
+        assert any("broadcast 1 create" in ln for ln in lines)
+        status = raw_lines(tool, "status", settle=2)
+        assert any(ln.startswith("Mode:") for ln in status)
+        assert any("mode unicast | mode broadcast" in ln for ln in status)
+    finally:
+        tool.cmd("proto text")

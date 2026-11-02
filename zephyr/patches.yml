@@ -89,3 +89,25 @@ patches:
     email: hubert.wlodarczyk.pl@gmail.com
     date: 2026-11-02
     upstreamable: true
+  # The volume controller (VCP) resets itself on a disconnection but not the VOCS clients it
+  # discovered: they kept their reference to the ACL until the next discovery, so the connection
+  # object was never freed and 'bonding disconnect X' + 'bonding connect X' failed with -EINVAL
+  # until reboot (found in the UX walk: a reconnect after a session with volume control).
+  - path: zephyr/0010-vocs-client-drop-conn-on-disconnect.patch
+    sha256sum: 2d1c80fea651b6505ab241a7189555305fa8e7916cad004430bf77dd3d4fbb91
+    module: zephyr
+    author: Hubert Włodarczyk
+    email: hubert.wlodarczyk.pl@gmail.com
+    date: 2026-11-02
+    upstreamable: true
+  # After an Invalid Change Counter error the volume controller re-reads the state and retries,
+  # but resent the stale counter, so the retry failed too. It only learns the counter from
+  # notifications (discovery does not read it): every write failed once the server's counter had
+  # moved, i.e. after any reconnection or on a hearing aid whose volume changed before.
+  - path: zephyr/0011-vcp-vol-ctlr-retry-with-read-counter.patch
+    sha256sum: 749bbe79ea52c32979fb6d463f9db477137eef6e14417648b0dc3c486ada2624
+    module: zephyr
+    author: Hubert Włodarczyk
+    email: hubert.wlodarczyk.pl@gmail.com
+    date: 2026-11-02
+    upstreamable: true

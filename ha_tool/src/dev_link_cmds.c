@@ -326,9 +326,23 @@ int cmd_bonding_pair(const struct shell *sh, size_t argc, char **argv)
 		return not_connected(sh, id);
 	}
 
+	/* Authenticated pairing (MITM) needs a way to show or enter a passkey; Zephyr only says
+	 * -EINVAL
+	 */
+	if (sec >= BT_SECURITY_L3 && vdevs[id].io == IO_NONE) {
+		char hint[2 * sizeof(struct cli_text) + 48];
+
+		snprintf(hint, sizeof(hint), "bonding pair %s sec=2; bonding io %s kbd_display",
+			 CLI_QS(vdevs[id].name), CLI_QS(vdevs[id].name));
+		return cli_err_hint(sh, -EINVAL, hint,
+				    "sec=%ld needs authenticated pairing, identity %s has io=none "
+				    "(io applies from the next connection)",
+				    sec, CLI_QS(vdevs[id].name));
+	}
+
 	err = bt_conn_set_security(vdevs[id].conn, (bt_security_t)sec);
 	if (err != 0) {
-		return cli_err(sh, err, "set security failed");
+		return cli_err(sh, err, "pairing of %s could not start", CLI_QS(vdevs[id].name));
 	}
 
 	cli_ok(sh, "id=%u sec=%ld", id, sec);

@@ -19,6 +19,7 @@
 #include <zephyr/shell/shell.h>
 
 #include "audio_tx.h"
+#include "bcast.h"
 #include "cli.h"
 #include "cli_cmds.h"
 #include "cli_tree.h"
@@ -126,10 +127,12 @@ static int all_bigs(const struct shell *sh, size_t argc, char **argv, enum all_o
 	static const char *const done[] = {"started", "stopped", "restarted"};
 	const bool force = cli_flag(argc, argv, "force");
 	char why[CLI_LINE_MAX / 2];
+	char failed_list[MAX_BIGS * 4] = "";
 	int first_err = 0;
 	int failed_big = 0;
+	int failed = 0;
 	int count = 0;
-	int ok = 0;
+	int done_n = 0; /* BIGs the operation was performed on (not already active / inactive) */
 
 	if (!cli_flag(argc, argv, "all")) {
 		return cli_err_hint(sh, -EINVAL, "broadcast <n> start; broadcast start --all",
@@ -170,13 +173,17 @@ static int all_bigs(const struct shell *sh, size_t argc, char **argv, enum all_o
 		}
 
 		if (err != 0) {
+			const size_t pos = strlen(failed_list);
+
 			result = "failed";
 			if (first_err == 0) {
 				first_err = err;
 				failed_big = b + 1;
 			}
-		} else {
-			ok++;
+			snprintf(&failed_list[pos], sizeof(failed_list) - pos, "%s%d",
+				 failed++ > 0 ? ", " : "", b + 1);
+		} else if (result == done[op]) {
+			done_n++;
 		}
 
 		cli_line(sh, "RESULT big=%d name=%s result=%s errno=%d reason=%s", b + 1,
@@ -187,11 +194,11 @@ static int all_bigs(const struct shell *sh, size_t argc, char **argv, enum all_o
 		char hint[48];
 
 		snprintf(hint, sizeof(hint), "broadcast %d show; broadcast budget", failed_big);
-		return cli_err_hint(sh, first_err, hint, "%d of %d BIGs %s, BIG %d failed", ok,
-				    count, done[op], failed_big);
+		return cli_err_hint(sh, first_err, hint, "%d of %d BIGs %s, %s %s failed", done_n,
+				    count, done[op], failed > 1 ? "BIGs" : "BIG", failed_list);
 	}
 
-	cli_ok(sh, "count=%d %s=%d", count, done[op], ok);
+	cli_ok(sh, "count=%d %s=%d", count, done[op], done_n);
 
 	return 0;
 }
@@ -224,10 +231,11 @@ static void show_human(const struct shell *sh, const struct big *big,
 	for (int s = 0; s < big->sg_count; s++) {
 		const struct subgroup *sg = &big->sg[s];
 
-		shell_print(sh, "%s Subgroup %d: %s %s %s %s",
+		shell_print(sh, "%s Subgroup %d: %s, %s%s%s%s%s",
 			    s + 1 < big->sg_count ? "|--" : "`--", s + 1, sg->preset_name,
-			    sg->lang[0] != '\0' ? sg->lang : "-", audio_ctx_str(sg->ctx),
-			    CLI_Q(sg->program));
+			    audio_ctx_str(sg->ctx), sg->lang[0] != '\0' ? ", language " : "",
+			    sg->lang, sg->program[0] != '\0' ? ", program " : "",
+			    sg->program[0] != '\0' ? CLI_Q(sg->program) : "");
 		for (int i = 0; i < big->bis_count; i++) {
 			const struct bis *b = &big->bis[i];
 
@@ -294,8 +302,16 @@ int cmd_broadcast_list(const struct shell *sh, size_t argc, char **argv)
 	ARG_UNUSED(argv);
 
 	if (human) {
-		shell_print(sh, "%-4s %-24s %-8s %-10s %-4s %s", "BIG", "NAME", "STATE",
-			    "SUBGROUPS", "BIS", "ID");
+		int active;
+		int configured;
+
+		bcast_counts(&active, &configured);
+		if (configured == 0) {
+			shell_print(sh, "No BIGs yet. Create one: broadcast 1 create name=<name>");
+		} else {
+			shell_print(sh, "%-4s %-24s %-8s %-10s %-4s %s", "BIG", "NAME", "STATE",
+				    "SUBGROUPS", "BIS", "ID");
+		}
 	}
 
 	for (int b = 0; b < MAX_BIGS; b++) {
@@ -370,7 +386,11 @@ int cmd_broadcast_budget(const struct shell *sh, size_t argc, char **argv)
 	}
 
 	if (human) {
-		shell_print(sh, "Budget:");
+		char p3[16];
+
+		/* The rest of the period is kept for advertising, PA and the controller */
+		shell_print(sh, "Air time of each %u ms (broadcasts may use %s%%):",
+			    BUDGET_PERIOD_US / 1000U, pct(budget_limit_us(NULL), p3, sizeof(p3)));
 	}
 
 	for (int b = 0; b < MAX_BIGS; b++) {
@@ -398,8 +418,10 @@ int cmd_broadcast_budget(const struct shell *sh, size_t argc, char **argv)
 	}
 
 	if (human) {
-		shell_print(sh, "  Total:    %s%%", pct(budget_used_us(NULL), p1, sizeof(p1)));
-		shell_print(sh, "  Available: %s%%", pct(budget_free_us(), p2, sizeof(p2)));
+		shell_print(sh, "  Used:  %s%%", pct(budget_used_us(NULL), p1, sizeof(p1)));
+		shell_print(sh, "  Free:  %s%%, enough for one more BIG of %d BIS (%s, rtn=%u)",
+			    pct(budget_free_us(), p2, sizeof(p2)),
+			    budget_fit_bis(&qos, preset, enc != 0), name, qos.rtn);
 	}
 
 	cli_ok(sh,

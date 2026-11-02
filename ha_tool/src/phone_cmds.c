@@ -61,12 +61,20 @@ static int need_attached(const struct shell *sh)
  */
 static int submit(const struct shell *sh, const struct phone_msg *msg, bool to_device)
 {
+	const char *refused;
+
 	if (mode_require(sh, MODE_UNICAST) != 0) {
 		return -EBUSY;
 	}
 
 	if (to_device && need_attached(sh) != 0) {
 		return -ENOTCONN;
+	}
+
+	refused = phone_refused(msg->ev);
+	if (refused != NULL) {
+		return cli_err_hint(sh, -EPERM, "le-source status",
+				    "not possible while the source is %s", refused);
 	}
 
 	return queue(sh, msg);
@@ -440,6 +448,28 @@ int cmd_le_source_status(const struct shell *sh, size_t argc, char **argv)
 
 	phone_get_status(&st);
 	dev_state_get(dev_selected(), &ds);
+	if (cli_proto_get() == CLI_PROTO_HUMAN) {
+		/* Source, link, stream and call apart (docs/broadcast-ux.md, "Source status") */
+		shell_print(sh, "Identity:  %s", ds.name);
+		shell_print(sh, "Device:    %s (%s)",
+			    strcmp(ds.peer_name, "none") != 0 ? ds.peer_name : ds.peer,
+			    ds.connection);
+		shell_print(sh, "State:     %s%s", st.state, st.music ? ", music wanted" : "");
+		if (st.streaming) {
+			shell_print(sh, "Stream:    active, %s, %s%s", audio_ctx_str(st.ctx),
+				    st.preset, st.bidir ? ", with microphone" : "");
+		} else {
+			shell_print(sh, "Stream:    stopped");
+		}
+		if (st.call_index >= 0) {
+			shell_print(sh, "Call:      %d %s", st.call_index, st.call_state);
+		}
+		if (st.bidir) {
+			shell_print(sh, "RX loss:   %u of %u frames", st.rx_lost,
+				    st.rx + st.rx_lost);
+		}
+	}
+
 	cli_ok(sh,
 	       "identity=%s device=%s device_name=%s connection=%s state=%s discovered=%d "
 	       "stream=%s ctx=%s preset=%s bidir=%d call=%d call_state=%s music=%d tx=%u rx=%u "

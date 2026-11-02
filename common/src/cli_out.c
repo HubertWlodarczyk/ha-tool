@@ -487,10 +487,23 @@ const char *cli_str(const char *s, char *buf, size_t len)
 	return buf;
 }
 
+/* Longest value cli_quote() keeps whole: room for the quotes and a few escapes in cli_text */
+#define QUOTE_KEEP 84
+
 struct cli_text cli_quote(const char *s)
 {
 	struct cli_text t;
-	const char *q = cli_str(s, t.s, sizeof(t.s));
+	char tmp[QUOTE_KEEP + 1];
+	const char *q;
+
+	/* A longer value is shortened visibly ("...") instead of cut off mid-word */
+	if (s != NULL && strlen(s) > QUOTE_KEEP) {
+		memcpy(tmp, s, QUOTE_KEEP - 3);
+		memcpy(&tmp[QUOTE_KEEP - 3], "...", sizeof("..."));
+		s = tmp;
+	}
+
+	q = cli_str(s, t.s, sizeof(t.s));
 
 	if (q != t.s) {
 		snprintf(t.s, sizeof(t.s), "%s", q);

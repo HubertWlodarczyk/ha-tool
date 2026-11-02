@@ -38,9 +38,6 @@ target_sources(app PRIVATE
   ../common/src/hci_util.c
 )
 
-# CLI_KEYS() sets of the commands (common/include/cli.h)
-zephyr_linker_sources(SECTIONS cli_sections.ld)
-
 # Real board only: application core at 128 MHz
 if(CONFIG_BOARD_NRF5340DK)
   target_sources(app PRIVATE src/board.c)

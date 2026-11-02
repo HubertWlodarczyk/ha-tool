@@ -146,7 +146,13 @@ void big_effective_qos(const struct big *big, struct bt_bap_qos_cfg *qos)
 
 void big_init_draft(struct big *big, int number)
 {
+	/* Stack objects of an earlier run that were still stopping (big_release keeps them) */
+	struct bt_cap_broadcast_source *source = big->source;
+	struct bt_le_ext_adv *adv = big->adv;
+
 	memset(big, 0, sizeof(*big));
+	big->source = source;
+	big->adv = adv;
 	big->state = BIG_DRAFT;
 	snprintf(big->name, sizeof(big->name), "HA-Tool Auracast %d", number);
 	(void)bt_rand(&big->broadcast_id, BT_AUDIO_BROADCAST_ID_SIZE);

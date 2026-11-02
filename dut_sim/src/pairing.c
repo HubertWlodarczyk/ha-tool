@@ -47,12 +47,35 @@ int dut_bond_count(void)
 	return count;
 }
 
+static struct bt_conn *pair_conn;
+
+static void remember(struct bt_conn *conn)
+{
+	if (pair_conn != NULL) {
+		bt_conn_unref(pair_conn);
+	}
+
+	pair_conn = bt_conn_ref(conn);
+}
+
+/* The pairing of conn is over: passkey / confirm no longer apply, and the connection object can
+ * be recycled after its disconnection
+ */
+static void forget(struct bt_conn *conn)
+{
+	if (pair_conn != NULL && pair_conn == conn) {
+		bt_conn_unref(pair_conn);
+		pair_conn = NULL;
+	}
+}
+
 static void pairing_complete(struct bt_conn *conn, bool bonded)
 {
 	char peer[CLI_ADDR_STR_LEN];
 
 	cli_addr_str(bt_conn_get_dst(conn), peer, sizeof(peer));
 	cli_evt("dut_bonded", "peer=%s bonded=%d bonds=%d", peer, bonded, dut_bond_count());
+	forget(conn);
 }
 
 static void pairing_failed(struct bt_conn *conn, enum bt_security_err reason)
@@ -61,6 +84,7 @@ static void pairing_failed(struct bt_conn *conn, enum bt_security_err reason)
 
 	cli_addr_str(bt_conn_get_dst(conn), peer, sizeof(peer));
 	cli_evt("dut_pair_failed", "peer=%s reason=%d", peer, reason);
+	forget(conn);
 }
 
 static void bond_deleted(uint8_t id, const bt_addr_le_t *peer)
@@ -71,17 +95,6 @@ static void bond_deleted(uint8_t id, const bt_addr_le_t *peer)
 
 	cli_addr_str(peer, addr, sizeof(addr));
 	cli_evt("dut_bond_deleted", "peer=%s", addr);
-}
-
-static struct bt_conn *pair_conn;
-
-static void remember(struct bt_conn *conn)
-{
-	if (pair_conn != NULL) {
-		bt_conn_unref(pair_conn);
-	}
-
-	pair_conn = bt_conn_ref(conn);
 }
 
 static void auth_passkey_display(struct bt_conn *conn, unsigned int passkey)

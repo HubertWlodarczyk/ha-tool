@@ -137,8 +137,8 @@ uint32_t unicast_rx_lost(void)
 
 void unicast_link_lost(void)
 {
-	if (uc.group != NULL) {
-		(void)bt_cap_unicast_group_delete(uc.group);
+	/* The link is gone, so its streams are released and the group can go */
+	if (uc.group != NULL && bt_cap_unicast_group_delete(uc.group) == 0) {
 		uc.group = NULL;
 	}
 
@@ -243,9 +243,13 @@ int unicast_close(void)
 		}
 	}
 
+	/* A group whose streams did not release cannot be deleted: keep it, so the next close
+	 * tries again instead of the pool (one group) being lost until reboot
+	 */
 	err = bt_cap_unicast_group_delete(uc.group);
 	if (err != 0) {
 		LOG_WRN("Group delete failed: %d", err);
+		return err;
 	}
 
 	uc.group = NULL;
@@ -377,7 +381,10 @@ int unicast_open(const struct unicast_cfg *req)
 		return update_context(&cfg);
 	}
 
-	(void)unicast_close();
+	err = unicast_close();
+	if (err != 0) {
+		return err;
+	}
 
 	uc.preset = *preset;
 	err = bt_audio_codec_cfg_meta_set_stream_context(&uc.preset.codec_cfg, cfg.ctx);

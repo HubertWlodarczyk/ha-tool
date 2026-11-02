@@ -69,6 +69,11 @@ static bool tbs_originate(struct bt_conn *conn, uint8_t call_index, const char *
 	ARG_UNUSED(conn);
 
 	cli_evt("source_call_request", "idx=%u op=originate uri=%s", call_index, CLI_Q(uri));
+	if (!phone_takes_peer_call()) {
+		/* Refused in GTBS, not created and left alerting */
+		return false;
+	}
+
 	phone_post_event(PH_EV_PEER_ORIGINATED, call_index);
 
 	return true;

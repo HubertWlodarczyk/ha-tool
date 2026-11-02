@@ -187,8 +187,8 @@ static void scan_recv(const struct bt_le_scan_recv_info *info, struct net_buf_si
 	cli_evt("dut_bcast_found",
 		"broadcast_id=0x%06X name=%s addr=%s sid=%u pbp=%d pbp_encrypted=%d pbp_sq=%d "
 		"pbp_hq=%d rssi=%d",
-		adv.broadcast_id, adv.name[0] != '\0' ? adv.name : "none", addr, info->sid, adv.pbp,
-		!!(adv.pbp_features & BT_PBP_ANNOUNCEMENT_FEATURE_ENCRYPTION),
+		adv.broadcast_id, CLI_Q(adv.name[0] != '\0' ? adv.name : "none"), addr, info->sid,
+		adv.pbp, !!(adv.pbp_features & BT_PBP_ANNOUNCEMENT_FEATURE_ENCRYPTION),
 		!!(adv.pbp_features & BT_PBP_ANNOUNCEMENT_FEATURE_STANDARD_QUALITY),
 		!!(adv.pbp_features & BT_PBP_ANNOUNCEMENT_FEATURE_HIGH_QUALITY), info->rssi);
 
@@ -510,6 +510,12 @@ void bsink_reset(void)
 		 */
 		(void)bt_bap_broadcast_sink_stop(bs.sink);
 		if (bt_bap_broadcast_sink_delete(bs.sink) != 0) {
+			/* One still stopping from before: try it once more, never lose it silently
+			 */
+			if (bs.stale != NULL && bt_bap_broadcast_sink_delete(bs.stale) != 0) {
+				LOG_WRN("Broadcast sink %p still stopping, dropped",
+					(void *)bs.stale);
+			}
 			bs.stale = bs.sink;
 		} else {
 			release_recv_states();
@@ -573,7 +579,7 @@ static int cmd_scan(const struct shell *sh, size_t argc, char **argv)
 	}
 
 	bs.state = ST_SCANNING;
-	cli_ok(sh, "target=%s", bs.target[0] != '\0' ? bs.target : "any");
+	cli_ok(sh, "target=%s", CLI_Q(bs.target[0] != '\0' ? bs.target : "any"));
 
 	return 0;
 }
@@ -595,7 +601,7 @@ static int cmd_status(const struct shell *sh, size_t argc, char **argv)
 	ARG_UNUSED(argv);
 
 	cli_ok(sh, "state=%s broadcast_id=0x%06X name=%s encrypted=%d streams=%u",
-	       bsink_state_str(), bs.broadcast_id, bs.name[0] != '\0' ? bs.name : "none",
+	       bsink_state_str(), bs.broadcast_id, CLI_Q(bs.name[0] != '\0' ? bs.name : "none"),
 	       bs.encrypted, bs.started);
 
 	return 0;

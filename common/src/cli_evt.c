@@ -241,9 +241,12 @@ static void print_evt(const struct shell *sh, const char *text)
 
 		memcpy(evt_name, name, n);
 		evt_name[n] = '\0';
+		sentence[0] = '\0';
 		if (cli_evt_human(evt_name, body != NULL ? body + 1 : "", sentence,
 				  sizeof(sentence))) {
-			shell_print(sh, "%s", sentence);
+			if (sentence[0] != '\0') {
+				shell_print(sh, "%s", sentence);
+			}
 			if (!cli_human_verbose()) {
 				return;
 			}

@@ -7,7 +7,7 @@ audio content, not just the signalling."""
 
 import pytest
 
-from helpers import STREAM_TIMEOUT, connect, near
+from helpers import STREAM_TIMEOUT, connect, disconnect, near
 
 
 @pytest.fixture
@@ -135,6 +135,50 @@ def test_alert_during_music(phone):
     dut.wait_evt("dut_stream", since=m, state="metadata", ctx="media", timeout=15)
 
 
+def test_music_requested_during_alert_plays_after_it(phone):
+    """Music started while an alert plays from idle is deferred, then plays when it ends."""
+    ha, dut = phone
+    ha.cmd("le-source alert ms=2500 freq=1500")
+    ha.wait_evt("source_state", to="alert", timeout=STREAM_TIMEOUT)
+    m = ha.mark()
+    ha.cmd("le-source music start preset=48_2 freq=440")
+    ha.wait_evt("source_music", since=m, state="deferred", timeout=5)
+    ha.wait_evt("source_state", since=m, to="music", timeout=15)
+    dut.wait_evt("dut_audio", since=dut.mark(), src="unicast", freq=near(440), timeout=10)
+
+
+def test_volume_after_hearing_aid_changed_it(setup):
+    """The user turned the hearing aid's volume before the phone connected, so the server's
+    change counter is no longer 0: the first write must still work (Zephyr retried with the stale
+    counter and gave up, patch 0011; real hearing aids are rarely at counter 0)."""
+    ha, dut, addr = setup
+    dut.cmd("volume 50")
+    ha.cmd("mode unicast")
+    dev = connect(ha, addr, name="phone")
+    ha.cmd(f"le-source attach {dev}")
+    m = dut.mark()
+    ha.cmd("le-source volume set 120")
+    dut.wait_evt("dut_volume", since=m, volume=120, timeout=STREAM_TIMEOUT)
+    ha.wait_evt("source_volume", volume=120, timeout=15)
+
+
+def test_reconnect_after_profile_discovery(phone):
+    """Disconnect and connect the same identity again after a session with volume control.
+    Zephyr's VOCS client kept its reference to the old connection (patch 0010), so the new
+    connection from the same identity to the same peer failed with -EINVAL until reboot."""
+    ha, dut = phone
+    ha.cmd("le-source volume set 120")
+    ha.wait_evt("source_volume", volume=120, timeout=STREAM_TIMEOUT)
+    addr = dut.cmd("addr")["addr"]
+    disconnect(ha, 1)
+    m = ha.mark()
+    ha.cmd(f"bonding connect 1 address={addr}")
+    ha.wait_evt("bonding_connected", since=m, id=1, timeout=20)
+    m = dut.mark()
+    ha.cmd("le-source volume set 80")
+    dut.wait_evt("dut_volume", since=m, volume=80, timeout=STREAM_TIMEOUT)
+
+
 def test_volume(phone):
     ha, dut = phone
     m = dut.mark()
@@ -151,9 +195,8 @@ def test_state_machine(phone):
     ha, dut = phone
     assert ha.cmd("le-source status")["state"] == "idle"
 
-    ha.cmd("le-source call accept")  # nothing is ringing
-    ev = ha.wait_evt("source_error", op="call_accept")
-    assert ev["err"] == "-1" and ev["state"] == "idle"  # -EPERM
+    rep = ha.cmd("le-source call accept", check=False)  # nothing is ringing: refused at once
+    assert rep.errno == -1 and "idle" in rep.raw and rep.values["hint"] == "le-source status"
 
     m = ha.mark()
     start_music(ha, dut)

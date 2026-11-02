@@ -528,7 +528,7 @@ BIG 2 "Announcements".... started
 BIG 3 "Emergency"........ failed
 
 Cannot start BIG 3:
-antenna time budget exceeded.
+not enough air time.
 ```
 
 The operation should not present a partial success as a full success.

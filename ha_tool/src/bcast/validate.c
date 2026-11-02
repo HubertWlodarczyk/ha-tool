@@ -136,14 +136,13 @@ static int check_resources(const struct shell *sh, const struct big *big,
 
 	air = big_airtime_us(big, qos);
 	if (budget_used_us(big) + big_cost_us(air, qos->interval) > budget_limit_us(big)) {
+		/* Short: it is also the reason of a RESULT line; the details: broadcast budget */
 		return cli_err_hint(
 			sh, -E2BIG, "broadcast budget",
-			"antenna time budget exceeded: airtime_us=%u interval_us=%u cost_us=%u "
-			"used_us=%u budget_us=%u (lower rtn=, fewer BISes, a smaller preset or "
-			"stop "
-			"another broadcast)",
-			air, qos->interval, big_cost_us(air, qos->interval), budget_used_us(big),
-			budget_limit_us(big));
+			"not enough air time: BIG %d needs %u us, %u us free (lower rtn=, "
+			"fewer BISes or a smaller preset)",
+			big_number(big), big_cost_us(air, qos->interval),
+			budget_limit_us(big) - MIN(budget_used_us(big), budget_limit_us(big)));
 	}
 
 	return 0;

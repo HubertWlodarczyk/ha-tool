@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MPL-2.0
  */
 
-/* CLI input: key=value arguments, accepted keys per command, addresses, enums. */
+/* CLI input: key=value arguments, addresses, enums. */
 
 #include <errno.h>
 #include <stdio.h>
@@ -15,52 +15,6 @@
 #include <zephyr/shell/shell.h>
 
 #include "cli.h"
-
-int cli_check_keys(const struct shell *sh, size_t argc, char **argv, const struct cli_keyset *set)
-{
-	for (size_t i = 1; i < argc; i++) {
-		const char *eq = strchr(argv[i], '=');
-		bool known = false;
-
-		if (eq == NULL) {
-			continue; /* positional */
-		}
-
-		for (const char *const *k = set->keys; *k != NULL; k++) {
-			if (strlen(*k) == (size_t)(eq - argv[i]) &&
-			    strncmp(*k, argv[i], eq - argv[i]) == 0) {
-				known = true;
-				break;
-			}
-		}
-
-		if (!known) {
-			char list[160];
-			size_t pos = 0;
-
-			for (const char *const *k = set->keys;
-			     *k != NULL && pos + 20 < sizeof(list); k++) {
-				pos += snprintf(&list[pos], sizeof(list) - pos, "%s%s",
-						pos > 0 ? "," : "", *k);
-			}
-
-			list[pos] = '\0';
-			return cli_err(sh, -EINVAL, "unknown key key=%.*s cmd=%s allowed=%s",
-				       (int)(eq - argv[i]), argv[i], CLI_Q(set->cmd),
-				       pos > 0 ? list : "none");
-		}
-
-		/* cli_kv() would silently take the first one */
-		for (size_t j = 1; j < i; j++) {
-			if (strncmp(argv[j], argv[i], eq - argv[i] + 1) == 0) {
-				return cli_err(sh, -EINVAL, "duplicate key key=%.*s cmd=%s",
-					       (int)(eq - argv[i]), argv[i], CLI_Q(set->cmd));
-			}
-		}
-	}
-
-	return 0;
-}
 
 const char *cli_kv(size_t argc, char **argv, const char *key)
 {

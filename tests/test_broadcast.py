@@ -201,7 +201,7 @@ def test_airtime_limit_and_rtn_override(pair):
     ha.cmd("broadcast 1 create name=Heavy preset=48_6 bis=3")
     assert ha.cmd("broadcast 1 show")["fits"] == "0"
     rep = ha.cmd("broadcast 1 start", check=False)
-    assert not rep.ok and rep.errno == -7 and "airtime_us=" in rep.raw  # -E2BIG
+    assert not rep.ok and rep.errno == -7 and "not enough air time" in rep.raw  # -E2BIG
 
     ha.cmd("broadcast 1 set rtn=1")
     assert ha.cmd("broadcast 1 show")["fits"] == "1"
@@ -242,7 +242,7 @@ def test_air_budget_over_broadcasts(pair):
     ha.cmd("broadcast 1 start")
     ha.wait_evt("broadcast_started", big=1, timeout=15)
     rep = ha.cmd("broadcast 2 start", check=False)
-    assert not rep.ok and rep.errno == -7 and "used_us=" in rep.raw
+    assert not rep.ok and rep.errno == -7 and "not enough air time" in rep.raw
     ha.cmd("broadcast 1 stop")
     ha.cmd("broadcast 2 start")  # alone: fine
     ha.wait_evt("broadcast_started", big=2, timeout=15)

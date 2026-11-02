@@ -10,6 +10,7 @@
  */
 
 #include <errno.h>
+#include <stdlib.h>
 
 #include <zephyr/bluetooth/audio/aics.h>
 #include <zephyr/bluetooth/audio/has.h>
@@ -19,6 +20,7 @@
 #include <zephyr/bluetooth/conn.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/shell/shell.h>
 
 #include "cli.h"
 #include "dut.h"
@@ -163,3 +165,31 @@ int ha_services_init(void)
 
 	return err != 0 ? err : register_has_micp();
 }
+
+/* The hearing aid user turns its volume wheel: the server's change counter moves, which a phone
+ * connecting later has to cope with (its first write carries a stale counter)
+ */
+static int cmd_volume(const struct shell *sh, size_t argc, char **argv)
+{
+	char *end;
+	const long volume = strtol(argv[1], &end, 10);
+	int err;
+
+	ARG_UNUSED(argc);
+
+	if (*end != '\0' || volume < 0 || volume > 255) {
+		return cli_err(sh, -EINVAL, "volume 0..255");
+	}
+
+	err = bt_vcp_vol_rend_set_vol((uint8_t)volume);
+	if (err != 0) {
+		return cli_err(sh, err, "volume change failed");
+	}
+
+	cli_ok(sh, "volume=%ld", volume);
+
+	return 0;
+}
+
+SHELL_CMD_ARG_REGISTER(volume, NULL, "Local volume change <0..255> (the user's wheel)", cmd_volume,
+		       2, 0);

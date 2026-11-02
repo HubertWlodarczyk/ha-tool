@@ -107,12 +107,23 @@ static void vcp_discover(struct bt_vcp_vol_ctlr *ctlr, int err, uint8_t vocs_cou
 	k_sem_give(&sem_disc);
 }
 
+/* The request was accepted locally but the hearing aid refused or never answered the write */
+static void write_result(const char *op, int err)
+{
+	if (err != 0) {
+		LOG_WRN("VCP %s failed: %d", op, err);
+		cli_evt("source_error", "op=%s err=%d state=%s", op, err, phone_state_str());
+	}
+}
+
 static void vcp_state(struct bt_vcp_vol_ctlr *ctlr, int err, uint8_t volume, uint8_t mute)
 {
 	ARG_UNUSED(ctlr);
 
 	if (err == 0) {
 		cli_evt("source_volume", "id=%u volume=%u mute=%u", unicast_dev_id(), volume, mute);
+	} else {
+		write_result("volume_read", err);
 	}
 }
 
@@ -125,9 +136,27 @@ static void vocs_state(struct bt_vocs *inst, int err, int16_t offset)
 	}
 }
 
+#define WRITE_CB(_op)                                                                              \
+	static void vcp_##_op(struct bt_vcp_vol_ctlr *ctlr, int err)                               \
+	{                                                                                          \
+		ARG_UNUSED(ctlr);                                                                  \
+		write_result(#_op, err);                                                           \
+	}
+
+WRITE_CB(vol_set)
+WRITE_CB(vol_up)
+WRITE_CB(vol_down)
+WRITE_CB(mute)
+WRITE_CB(unmute)
+
 static struct bt_vcp_vol_ctlr_cb vcp_cb = {
 	.discover = vcp_discover,
 	.state = vcp_state,
+	.vol_set = vcp_vol_set,
+	.vol_up = vcp_vol_up,
+	.vol_down = vcp_vol_down,
+	.mute = vcp_mute,
+	.unmute = vcp_unmute,
 	.vocs_cb = {.state = vocs_state},
 };
 

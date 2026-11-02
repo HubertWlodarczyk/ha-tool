@@ -132,7 +132,8 @@ void cli_evt(const char *name, const char *fmt, ...) __printf_like(2, 3);
 
 /*
  * proto human: an event the application describes in words (out, a sentence) is printed so
- * instead of its EVT line; with cli_human_verbose() both. Weak: no event is described.
+ * instead of its EVT line; an empty sentence hides a low-level event. With cli_human_verbose()
+ * the EVT line follows too. Weak: no event is described.
  */
 bool cli_evt_human(const char *name, const char *body, char *out, size_t len);
 void cli_human_verbose_set(bool on);
@@ -168,38 +169,5 @@ int cli_parse_u8(const char *str, uint8_t *out);
 
 /* Short name for a HCI disconnect reason or SMP error */
 const char *cli_hci_reason_str(uint8_t reason);
-
-/*
- * Keys (key=value) a command accepts; anything else is an error instead of being ignored
- * (a typo like frq= would silently fall back to the default). Defined next to the handler:
- *
- *   CLI_KEYS(bcast_tone, "bcast tone", "bis", "freq", "level");
- *   static int cmd_tone(...) { CLI_CHECK(bcast_tone, sh, argc, argv); ... }
- *
- * The sets are collected in an iterable section ('cli spec' lists them for the protocol test).
- */
-struct cli_keyset {
-	const char *cmd;
-	const char *const *keys;
-};
-
-#define CLI_KEY_(_key) _key,
-
-#define CLI_KEYS(_id, _cmd, ...)                                                                   \
-	static const char *const cli_keys_##_id[] = {                                              \
-		FOR_EACH_NONEMPTY_TERM(CLI_KEY_, (), __VA_ARGS__) NULL};                           \
-	static const STRUCT_SECTION_ITERABLE(cli_keyset, cli_keyset_##_id) = {                     \
-		.cmd = _cmd,                                                                       \
-		.keys = cli_keys_##_id,                                                            \
-	}
-
-#define CLI_CHECK(_id, _sh, _argc, _argv)                                                          \
-	do {                                                                                       \
-		if (cli_check_keys(_sh, _argc, _argv, &cli_keyset_##_id) != 0) {                   \
-			return -EINVAL;                                                            \
-		}                                                                                  \
-	} while (0)
-
-int cli_check_keys(const struct shell *sh, size_t argc, char **argv, const struct cli_keyset *set);
 
 #endif /* CLI_H_ */

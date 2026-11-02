@@ -1,0 +1,18 @@
+diff --git a/subsys/bluetooth/audio/vcp_vol_ctlr.c b/subsys/bluetooth/audio/vcp_vol_ctlr.c
+index 97405b8d4a4..82b427166b7 100644
+--- a/subsys/bluetooth/audio/vcp_vol_ctlr.c
++++ b/subsys/bluetooth/audio/vcp_vol_ctlr.c
+@@ -294,6 +294,13 @@ static uint8_t internal_read_vol_state_cb(struct bt_conn *conn, uint8_t err,
+ 				vol_ctlr->state.mute,
+ 				vol_ctlr->state.change_counter);
+ 
++			/* The retry must carry the counter just read: resending the stale one
++			 * failed again with Invalid Change Counter, so a write never succeeded
++			 * after the server's counter had moved (any reconnection, or a hearing
++			 * aid whose volume changed before the connection)
++			 */
++			vol_ctlr->cp_val.cp.counter = vol_ctlr->state.change_counter;
++
+ 			/* clear busy flag to reuse function */
+ 			if (opcode == BT_VCP_OPCODE_SET_ABS_VOL) {
+ 				write_err = write_set_vol_cp(vol_ctlr);

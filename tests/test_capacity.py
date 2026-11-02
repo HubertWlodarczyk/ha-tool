@@ -30,7 +30,7 @@ def test_most_bises(pair):
     assert budget["next_big_bis"] == "0" and int(budget["free_us"]) < 2500, budget
     create_big(ha, 3, 1, preset="8_2")
     rep = ha.cmd("broadcast 3 start", check=False)
-    assert rep.errno == -7 and "budget_us=" in rep.raw  # -E2BIG with the numbers
+    assert rep.errno == -7 and "us free" in rep.raw  # -E2BIG with the numbers
 
     check_big(dut, "Cap1", big_tones(1, 8))
     check_big(dut, "Cap2", big_tones(2, 3), code="Secret2")

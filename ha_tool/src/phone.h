@@ -140,6 +140,12 @@ struct phone_status {
 };
 
 void phone_get_status(struct phone_status *st);
+/* The state name if request ev is not allowed in the current state, NULL if it is (the phone
+ * thread checks again; this only lets a command answer ERR right away)
+ */
+const char *phone_refused(enum phone_ev ev);
+/* A call dialled by the hearing aid can start now (no call, alert or other procedure running) */
+bool phone_takes_peer_call(void);
 
 /* --- unicast.c --- */
 struct unicast_cfg {

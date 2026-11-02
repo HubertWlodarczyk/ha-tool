@@ -1,0 +1,35 @@
+diff --git a/subsys/bluetooth/audio/vocs_client.c b/subsys/bluetooth/audio/vocs_client.c
+index 156f367a6d8..84151c131fe 100644
+--- a/subsys/bluetooth/audio/vocs_client.c
++++ b/subsys/bluetooth/audio/vocs_client.c
+@@ -716,6 +716,30 @@ static void vocs_client_reset(struct bt_vocs_client *inst)
+ 	bt_conn_drop(&inst->conn);
+ }
+ 
++/* The volume controller resets itself on a disconnection but not the VOCS clients it
++ * discovered: without this they keep their reference to the ACL until the next discovery, so the
++ * connection object is never freed and a new connection from the same identity to the same peer
++ * fails (bt_conn_le_create() returns -EINVAL). Same as the AICS client.
++ */
++static void disconnected(struct bt_conn *conn, uint8_t reason)
++{
++	ARG_UNUSED(reason);
++
++	if (!bt_conn_is_type(conn, BT_CONN_TYPE_LE)) {
++		return;
++	}
++
++	ARRAY_FOR_EACH_PTR(insts, inst) {
++		if (inst->conn == conn) {
++			vocs_client_reset(inst);
++		}
++	}
++}
++
++BT_CONN_CB_DEFINE(vocs_client_conn_callbacks) = {
++	.disconnected = disconnected,
++};
++
+ int bt_vocs_client_free_instance(struct bt_vocs *vocs)
+ {
+ 	ARRAY_FOR_EACH_PTR(insts, inst) {

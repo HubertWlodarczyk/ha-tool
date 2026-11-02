@@ -45,6 +45,9 @@ LOG_MODULE_REGISTER(bcast, LOG_LEVEL_INF);
 
 static struct k_work_delayable start_timeout[MAX_BIGS];
 
+/* Serialises big_start / big_stop between the shell and the start timeout (system workqueue) */
+static K_MUTEX_DEFINE(big_lock);
+
 static void stream_started(struct bt_bap_stream *bap_stream)
 {
 	int i;
@@ -76,6 +79,7 @@ static void start_timeout_handler(struct k_work *work)
 	const int b = k_work_delayable_from_work(work) - start_timeout;
 	struct big *big = &bcast_bigs[b];
 
+	k_mutex_lock(&big_lock, K_FOREVER);
 	if (big->state == BIG_STREAMING && big->started < big->bis_count) {
 		cli_evt("broadcast_error",
 			"big=%d reason=start_timeout started=%u bis=%u airtime_us=%u: no room in "
@@ -84,6 +88,7 @@ static void start_timeout_handler(struct k_work *work)
 		big_stop(big);
 		big->last_err = -ETIMEDOUT;
 	}
+	k_mutex_unlock(&big_lock);
 }
 
 static void stream_stopped(struct bt_bap_stream *bap_stream, uint8_t reason)
@@ -226,10 +231,16 @@ int update_adv_data(struct big *big)
 	return bt_le_per_adv_set_data(big->adv, &per_ad, 1);
 }
 
-static void big_release(struct big *big)
+/* -EBADMSG if the source is still stopping: it is kept and deleted by the next release */
+static int big_release(struct big *big)
 {
 	if (big->source != NULL) {
-		(void)bt_cap_initiator_broadcast_audio_delete(big->source);
+		const int err = bt_cap_initiator_broadcast_audio_delete(big->source);
+
+		if (err != 0) {
+			LOG_WRN("BIG %d: source delete failed: %d", big_number(big), err);
+			return err;
+		}
 		big->source = NULL;
 	}
 
@@ -239,6 +250,8 @@ static void big_release(struct big *big)
 		(void)bt_le_ext_adv_delete(big->adv);
 		big->adv = NULL;
 	}
+
+	return 0;
 }
 
 /* The BIG transmits with the power of its advertising set (Zephyr controller) */
@@ -260,7 +273,7 @@ int apply_txpower(struct big *big, int8_t *selected)
 	return err;
 }
 
-int big_start(struct big *big)
+static int big_start_locked(struct big *big)
 {
 	struct bt_cap_initiator_broadcast_stream_param stream_params[MAX_BIS] = {0};
 	struct bt_cap_initiator_broadcast_subgroup_param sg_params[MAX_SG] = {0};
@@ -274,6 +287,12 @@ int big_start(struct big *big)
 	/* Model invariant (args.c); the arrays above are sized by it */
 	if (sg_count > MAX_SG || bis_count > MAX_BIS) {
 		return -EINVAL;
+	}
+
+	/* A source of an earlier run that was still stopping */
+	err = big_release(big);
+	if (err != 0) {
+		return -EBUSY;
 	}
 
 	big_effective_qos(big, &big->qos);
@@ -319,7 +338,7 @@ int big_start(struct big *big)
 	err = err ?: bt_cap_initiator_broadcast_audio_create(&create, &big->source);
 	err = err ?: apply_txpower(big, NULL);
 	if (err != 0) {
-		big_release(big);
+		(void)big_release(big);
 		return err;
 	}
 
@@ -335,7 +354,7 @@ int big_start(struct big *big)
 	err = err ?: bt_cap_initiator_broadcast_audio_start(big->source, big->adv);
 	if (err != 0) {
 		(void)bt_cap_initiator_broadcast_audio_stop(big->source);
-		big_release(big);
+		(void)big_release(big);
 		return err;
 	}
 
@@ -345,21 +364,37 @@ int big_start(struct big *big)
 	return 0;
 }
 
+int big_start(struct big *big)
+{
+	int err;
+
+	k_mutex_lock(&big_lock, K_FOREVER);
+	err = big_start_locked(big);
+	k_mutex_unlock(&big_lock);
+
+	return err;
+}
+
 void big_stop(struct big *big)
 {
+	/* Recursive: the start timeout calls this with the lock held */
+	k_mutex_lock(&big_lock, K_FOREVER);
 	if (big->state != BIG_STREAMING) {
+		k_mutex_unlock(&big_lock);
 		return;
 	}
 
+	(void)k_work_cancel_delayable(&start_timeout[big - bcast_bigs]);
 	(void)bt_cap_initiator_broadcast_audio_stop(big->source);
 	/* Streams stop asynchronously; let the BIG terminate before deleting the source */
 	for (int t = 0; t < BIG_STOP_TIMEOUT_MS && big->started > 0; t += POLL_MS) {
 		k_sleep(K_MSEC(POLL_MS));
 	}
 
-	big_release(big);
+	(void)big_release(big);
 	big->state = BIG_DRAFT;
 	big->was_started = true;
+	k_mutex_unlock(&big_lock);
 }
 
 void bcast_reset(void)

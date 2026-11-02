@@ -380,6 +380,10 @@ static int pick_call(const struct shell *sh, size_t argc, char **argv, int state
 	int err = 0;
 	long want = cli_kv_long(argc, argv, "idx", -1, &err);
 
+	if (err != 0) {
+		return cli_err(sh, -EINVAL, "idx=<call index>");
+	}
+
 	if (call.conn == NULL || call.count == 0) {
 		return cli_err(sh, -ENOENT, "no call");
 	}

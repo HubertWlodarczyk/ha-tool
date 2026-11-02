@@ -116,7 +116,6 @@ static struct {
 	struct unicast_cfg ring;
 	struct unicast_cfg call;
 	int call_index;
-	enum state alert_return;
 } ph = {
 	.music = {.preset = "48_2",
 		  .ctx = BT_AUDIO_CONTEXT_TYPE_MEDIA,
@@ -290,8 +289,6 @@ static void stop_music(const char *by, enum phone_ev cause)
 	if (ph.state == ST_MUSIC) {
 		(void)unicast_close();
 		set_state(ST_IDLE, cause);
-	} else if (ph.state == ST_ALERT) {
-		ph.alert_return = ST_IDLE;
 	}
 
 	cli_evt("source_music", "state=paused by=%s", by);
@@ -480,7 +477,6 @@ static int on_alert(const struct phone_msg *m)
 		return err;
 	}
 
-	ph.alert_return = ph.state;
 	set_state(ST_ALERT, m->ev);
 	k_work_reschedule(&alert_work, K_MSEC(m->alert.ms));
 
@@ -489,7 +485,9 @@ static int on_alert(const struct phone_msg *m)
 
 static int on_alert_timeout(const struct phone_msg *m)
 {
-	ph.music_wanted = ph.music_wanted && ph.alert_return == ST_MUSIC;
+	/* Alerts start only in IDLE or MUSIC: music_wanted already says what comes next (a music
+	 * stop during the alert cleared it, a music start during the alert set it)
+	 */
 	resume(m->ev);
 	return 0;
 }
@@ -623,6 +621,12 @@ static void handle(const struct phone_msg *m)
 		 "%s with the wrong payload (%d)", ev_names[m->ev], m->kind);
 
 	if ((allowed[m->ev] & BIT(ph.state)) == 0) {
+		/* A call the hearing aid dialled as the state changed (call.c checks first): GTBS
+		 * already created it, so end it rather than leave it alerting
+		 */
+		if (m->ev == PH_EV_PEER_ORIGINATED) {
+			(void)call_terminate(m->peer.call_index);
+		}
 		report_error(m->ev, -EPERM);
 		return;
 	}
@@ -706,6 +710,26 @@ void phone_get_status(struct phone_status *st)
 	st->tx = unicast_tx_count();
 	st->rx = unicast_rx_count();
 	st->rx_lost = unicast_rx_lost();
+}
+
+const char *phone_refused(enum phone_ev ev)
+{
+	const char *state = phone_state_str();
+
+	for (int s = 0; s < ST_COUNT; s++) {
+		if (state == state_names[s]) {
+			return (allowed[ev] & BIT(s)) != 0 ? NULL : state;
+		}
+	}
+
+	return NULL;
+}
+
+bool phone_takes_peer_call(void)
+{
+	const char *state = phone_state_str();
+
+	return state == state_names[ST_IDLE] || state == state_names[ST_MUSIC];
 }
 
 const char *phone_state_str(void)
