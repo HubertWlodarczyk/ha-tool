@@ -6,6 +6,7 @@
 
 /* Air time of BIG events and the budget all broadcasts share. */
 
+#include <stdio.h>
 #include <string.h>
 
 #include <zephyr/bluetooth/audio/bap.h>
@@ -27,8 +28,9 @@
  * Within it every BIG gets a phase free of the others and of the trains: no frame lost, also at
  * a receiver that stays synchronized to the train.
  * ADV_RESERVE_ONE_US (one BIG): its train and auxiliary set take their phase in one BIG event
- * out of 6 and 7 only, so the advertising finds room in the others (measured lossless up to
- * 8.5 ms of air); the earlier, conservative limit of 6.5 ms is kept.
+ * out of 6 and 7 only, and the controller keeps their slots in every BIG event anyway
+ * (big_ctlr_max_rtn), so for one BIG the controller's event limit is the one that counts:
+ * measured lossless right up to it in every preset, PHY, RTN and encryption.
  * Verified in BabbleSim at the edge of the budget (README, tests/test_capacity.py); past it the
  * BIGs still went out but trains or primary advertising collided with them (17-50 % loss, or
  * broadcasts nobody could find).
@@ -53,6 +55,71 @@ uint32_t big_airtime_us(const struct big *big, const struct bt_bap_qos_cfg *qos)
 		   (big->encrypted ? 4U : 0U);
 
 	return big->bis_count * (qos->rtn + 1U) * ((max_pdu + overhead) * us_per_byte + 150U);
+}
+
+/*
+ * The controller's own limit for one BIG (LE Create BIG, ull_adv_iso.c): the whole BIG event
+ * must fit the ISO interval next to the slots it keeps for the BIG's auxiliary and periodic
+ * advertising, or the BIG is refused (Invalid Parameters). For RTN > 0 it silently lowers RTN
+ * until the event fits, so the tool checks it itself and refuses instead (a BIG with fewer
+ * repetitions than asked would be a different test).
+ *   airtime(rtn) + CTLR_RESERVE_US + 4 us x (AUX_ADV_IND data + AUX_SYNC_IND data) <= interval
+ * CTLR_RESERVE_US: event overheads (3 x start-up + end margin), the control subevent and the PDU
+ * headers. Fitted to the acceptance matrix of scripts/capacity.py accept (10 presets, 1M / 2M,
+ * plain / encrypted, 1-8 BISes: every accepted BIG within the limit, every refused one past it;
+ * the fit leaves 2.74-2.84 ms). Advertising goes on the 2M secondary PHY (4 us per octet).
+ */
+#define CTLR_RESERVE_US 2830U
+
+/* Data octets of the BIG's AUX_ADV_IND (source.c update_adv_data) */
+static uint32_t aux_data_len(const struct big *big)
+{
+	const size_t program = strlen(big->sg[0].program);
+	uint32_t len = 7U + 2U + strlen(big->name); /* Broadcast ID, Broadcast Name */
+
+	if (big->pbp_enabled) {
+		len += 6U + (program > 0U ? 2U + program : 0U); /* PBP announcement */
+	}
+
+	return len;
+}
+
+/* Data octets of the AUX_SYNC_IND: BASE (estimate of what bt_cap builds) and the BIGInfo */
+static uint32_t pa_data_len(const struct big *big)
+{
+	uint32_t len = 8U; /* AD header, UUID, presentation delay, subgroup count */
+
+	for (int s = 0; s < big->sg_count; s++) {
+		const struct subgroup *sg = &big->sg[s];
+		const size_t program = strlen(sg->program);
+
+		/* codec ID, codec configuration, streaming context, language, program, BIS count */
+		len += 5U + 1U + 10U + 1U + 4U + (sg->lang[0] != '\0' ? 5U : 0U) +
+		       (program > 0U ? 2U + program : 0U) + 1U;
+	}
+
+	return len + 8U * big->bis_count + (big->encrypted ? 24U : 0U);
+}
+
+int big_ctlr_max_rtn(const struct big *big, const struct bt_bap_qos_cfg *qos)
+{
+	const uint32_t reserve = CTLR_RESERVE_US + 4U * (aux_data_len(big) + pa_data_len(big));
+	/* The ISO interval is a whole number of 1.25 ms: 44.1 kHz (framed, SDU every 10884 us)
+	 * gets 10 ms events
+	 */
+	const uint32_t iso_interval = qos->interval / 1250U * 1250U;
+	struct bt_bap_qos_cfg q = *qos;
+	int best = -1;
+
+	for (int rtn = 0; rtn <= qos->rtn; rtn++) {
+		q.rtn = rtn;
+		if (big_airtime_us(big, &q) + reserve > iso_interval) {
+			break;
+		}
+		best = rtn;
+	}
+
+	return best;
 }
 
 /* Share of the budget period a BIG takes */
@@ -129,12 +196,16 @@ int budget_fit_bis(const struct bt_bap_qos_cfg *qos, const struct bt_bap_lc3_pre
 
 	/* A BIG of n BISes of this kind, grown until it no longer fits */
 	memset(&probe, 0, sizeof(probe));
+	/* As a new BIG advertises by default (name, PBP): the controller's limit depends on it */
+	snprintf(probe.name, sizeof(probe.name), "HA-Tool Auracast %d", MAX_BIGS);
+	probe.pbp_enabled = true;
 	probe.sg_count = 1;
 	probe.sg[0].preset = *preset;
 	probe.encrypted = encrypted;
 	for (int n = 1; n <= max_n; n++) {
 		probe.bis_count = n;
-		if (big_cost_us(big_airtime_us(&probe, qos), qos->interval) > free_us) {
+		if (big_cost_us(big_airtime_us(&probe, qos), qos->interval) > free_us ||
+		    big_ctlr_max_rtn(&probe, qos) < (int)qos->rtn) {
 			break;
 		}
 

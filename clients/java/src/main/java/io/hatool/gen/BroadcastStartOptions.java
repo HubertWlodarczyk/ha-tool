@@ -16,7 +16,7 @@ public final class BroadcastStartOptions {
     final List<Object> args = new ArrayList<>();
     final Map<String, Object> keys = new LinkedHashMap<>();
 
-    /** --force: start next to BIGs of another interval (frames will be lost) */
+    /** --force: start anyway next to BIGs of another interval or past the air time budget (frames will be lost) */
     public BroadcastStartOptions force() {
         keys.put("--force", Boolean.TRUE);
         return this;

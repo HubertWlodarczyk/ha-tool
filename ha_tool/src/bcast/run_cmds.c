@@ -287,8 +287,10 @@ int cmd_broadcast_show(const struct shell *sh, size_t argc, char **argv)
 	       big->encrypted, pbp_str(big), big->sg_count, big->bis_count,
 	       qos.phy == BT_BAP_QOS_CFG_1M ? "1m" : "2m", qos.interval, qos.rtn, qos.sdu,
 	       big->pa_ms, air,
-	       qos.interval > 0 && budget_used_us(big) + big_cost_us(air, qos.interval) <=
-					   budget_limit_us(big));
+	       qos.interval > 0 &&
+		       budget_used_us(big) + big_cost_us(air, qos.interval) <=
+			       budget_limit_us(big) &&
+		       big_ctlr_max_rtn(big, &qos) >= (int)qos.rtn);
 
 	return 0;
 }

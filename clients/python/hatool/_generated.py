@@ -317,7 +317,12 @@ EVENTS: dict[str, dict[str, str]] = {'broadcast_error': {'big': 'int',
                        'interval_us': 'int',
                        'other_us': 'int',
                        'airtime_us': 'int',
-                       'other_airtime_us': 'int'},
+                       'other_airtime_us': 'int',
+                       'cost_us': 'int',
+                       'free_us': 'int',
+                       'rtn': 'int',
+                       'rtn_air': 'int',
+                       'bn': 'int'},
  'bonding_confirm': {'id': 'int', 'passkey': 'int'},
  'bonding_connect_failed': {'id': 'int', 'peer': 'addr', 'hci': 'str', 'reason': 'str'},
  'bonding_connected': {'id': 'int', 'peer': 'addr', 'local': 'addr', 'bonded': 'bool'},
@@ -1198,7 +1203,8 @@ class _Broadcast:
 
     def start_all(self, *, force: bool = False, reply_timeout: float = 10.0) -> Reply:
         """Start every configured BIG; one RESULT line each, ERR if any failed
-        force: --force, start next to BIGs of another interval (frames will be lost)
+        force: --force, start anyway next to BIGs of another interval or past the air time budget
+        (frames will be lost)
         Reply: count (int), started (int)
         """
         return self._c.call(
@@ -1216,7 +1222,8 @@ class _Broadcast:
 
     def restart_all(self, *, force: bool = False, reply_timeout: float = 10.0) -> Reply:
         """Restart every configured BIG
-        force: --force, start next to BIGs of another interval (frames will be lost)
+        force: --force, start anyway next to BIGs of another interval or past the air time budget
+        (frames will be lost)
         Reply: count (int), restarted (int)
         """
         return self._c.call(
@@ -1340,7 +1347,8 @@ class _Broadcast:
 
     def start(self, big: int, *, force: bool = False, reply_timeout: float = 10.0) -> Reply:
         """Start the BIG (result: broadcast_started)
-        force: --force, start next to BIGs of another interval (frames will be lost)
+        force: --force, start anyway next to BIGs of another interval or past the air time budget
+        (frames will be lost)
         Reply: big (int), state (str), broadcast_id (hex)
         """
         return self._c.call(f"broadcast {big} start", [], {"--force": force}, timeout=reply_timeout)
@@ -1353,7 +1361,8 @@ class _Broadcast:
 
     def restart(self, big: int, *, force: bool = False, reply_timeout: float = 10.0) -> Reply:
         """Stop and start the BIG
-        force: --force, start next to BIGs of another interval (frames will be lost)
+        force: --force, start anyway next to BIGs of another interval or past the air time budget
+        (frames will be lost)
         Reply: big (int), state (str), broadcast_id (hex)
         """
         return self._c.call(

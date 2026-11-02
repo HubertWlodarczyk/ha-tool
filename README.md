@@ -101,6 +101,7 @@ Zephyr patches (re-apply them after every `west update`: `west patch apply`, or
 | `0009-shell-one-error-for-unknown-command` | A line with an unknown first word and more than `CONFIG_SHELL_ARGC_MAX` words got two errors ("command not found" and "too many arguments"), which shifted replies for clients. Now it gets one. |
 | `0010-vocs-client-drop-conn-on-disconnect` | **Host bug**: the volume controller reset itself on a disconnection, but the VOCS (balance) clients it discovered kept their reference to the connection. The connection object was never freed, so after a session with volume control `bonding disconnect X` + `bonding connect X` failed with `-EINVAL` until reboot. VOCS now drops it on disconnection, like AICS. |
 | `0011-vcp-vol-ctlr-retry-with-read-counter` | **Host bug**: after an "Invalid Change Counter" error the volume controller re-read the state but retried with the stale counter, so the retry failed too. It learns the counter only from notifications, so every volume command failed once the hearing aid's counter had moved: after any reconnection, or on a hearing aid whose volume had been changed before (the usual case with real hearing aids). |
+| `0012-controller-big-create-release-streams-on-error` | **Controller bug**: LE Create BIG reserved the BIS streams before its last check (the event must fit the ISO interval next to the advertising slots) and did not return them when that check refused the BIG. Two refused 8-BIS BIGs used up the pool of 16, and every later BIG failed with Memory Capacity Exceeded until reset. |
 
 All of them are suitable for upstream submission.
 
@@ -108,7 +109,7 @@ All of them are suitable for upstream submission.
 
 ```
 scripts/build.sh              # ha_tool + dut_sim for nrf5340bsim (host gcc, no Zephyr SDK)
-scripts/test.sh               # 120 tests in simulation, about 10 min (including the library tests)
+scripts/test.sh               # 122 tests in simulation, about 10 min (including the library tests)
 scripts/test.sh -m slow       # 11 long ones: fuzzing, soak, cycles, event storm, budget limit (about 12 min)
 scripts/test.sh -k phone      # selected tests
 HA_SIM_SPEED=2 scripts/test.sh   # simulation 2x faster than real time
@@ -119,6 +120,17 @@ Airtime analysis (who transmitted when, why ISO events are lost):
 ```
 HA_PHY_ARGS=-dump_imm scripts/test.sh -k <test>   # full radio dumps in $BSIM_OUT_PATH/results/<sim_id>/
 scripts/airtime.py <sim_id> --from-ms 5000         # streams, intervals, occupancy, causes of CIS losses
+```
+
+Limits and memory (the numbers in "How many BIGs and BISes at once" and "On hardware"):
+
+```
+scripts/capacity.py accept       # which BIGs the controller itself creates, next to the model
+scripts/capacity.py broadcast    # each preset / RTN / PHY / encryption at the budget's edge and
+                                 # one BIS past it (--force), received by the hearing aid
+scripts/capacity.py multi        # several BIGs at their combined edge
+scripts/capacity.py unicast      # CIS loss next to 1-2 other links of 30-100 ms
+scripts/mem_report.sh <name> [hci_ipc_CONFIG_X=v ...]   # DK RAM / flash of a config variant
 ```
 
 Logs of every test go to `tests/out/<test>/`:
@@ -336,44 +348,86 @@ the same library as in `dut_sim`), and the firmware only copies ready frames.
 #### How many BIGs and BISes at once
 
 Controller memory limits (`ha_tool/netcore.conf`): 3 BIGs, 8 BIS per BIG, 16 in total. In
-practice **airtime** decides. `broadcast <n> start` checks the shared budget:
+practice **airtime** decides. `broadcast <n> start` checks two things, in this order.
+
+**1. The controller's own event limit (one BIG).** LE Create BIG lays the whole BIG event out in
+one ISO interval next to slots for the BIG's own AUX and PA advertising. If it does not fit, the
+controller refuses the BIG, or, with RTN > 0, **silently lowers RTN** until it fits. The tool
+checks this itself and refuses with the largest RTN that fits (`hint="broadcast 1 set rtn=1"`):
+
+`airtime(rtn) + 2830 µs + 4 µs × (AUX_ADV_IND data + AUX_SYNC_IND data) ≤ ISO interval`
+
+- `airtime_us` = number of BISes × (RTN+1) × ((largest PDU of the BIG + headers, +4 B MIC when
+  encrypted, +5 B when framed) × byte time + 150 µs);
+- 2830 µs = 3 × event start-up and end margin, the control subevent and the PDU headers;
+- the data lengths come from the BIG: name, PBP, and the BASE (8 B per BIS, more with language or
+  program, +24 B of BIGInfo when encrypted); advertising uses the 2M secondary PHY;
+- the ISO interval is a whole number of 1.25 ms (44.1 kHz framed: 10 ms).
+
+The constant was fitted to `scripts/capacity.py accept` (10 presets × RTN 0/1/2/4 × 1M/2M ×
+plain/encrypted × 1–8 BIS, 727 BIGs): every BIG the tool accepts, the controller creates with
+exactly the requested layout (0 refusals, 0 lowered RTNs). After a start the tool also reads the
+real layout back (`bt_iso_chan_get_info`) and reports `broadcast_warning reason=layout` if it
+ever differs. `--force` cannot bypass this check, because the controller would refuse anyway.
+
+**2. The shared budget (several BIGs):**
 
 `Σ over transmitting BIGs (airtime_us + 1000) · 10 ms / interval + reserve ≤ 10000 µs`,
-reserve = 2500 µs with one BIG, 3800 µs with two or more
+reserve = 1000 µs with one BIG, 3800 µs with two or more
 
-- `airtime_us` = number of BISes × (RTN+1) × (largest PDU of the BIG + headers, +4 B MIC when
-  encrypted, +5 B when framed) × byte time + 150 µs,
 - 1000 µs per BIG is the controller's reservation around the event: control subevent, radio
   ramp-up (`EVENT_OVERHEAD_START_US` = 733 µs with scanning and coded PHY enabled), end and
-  scheduler margin,
+  scheduler margin;
 - the reserve with several BIGs = one phase for all PA trains (patch 0006 places them in the
   same phase, offset by whole BIG intervals), accounted the way a receiver synchronized to the
-  PA reserves it (1.9 ms on 2M) + one phase for the AUX sets (about 1 ms) + about 0.7 ms of free
-  gap, so that primary advertising goes out and the broadcasts can be found,
-- with one BIG, its PA and AUX occupy their phase only in 1 of 6 and 1 of 7 intervals, so
-  advertising fits into the others; the earlier 6.5 ms on-air limit stays (measured lossless up
-  to 8.5 ms).
+  PA reserves it (1.9 ms on 2M), + one phase for the AUX sets (about 1 ms), + about 0.7 ms of
+  free gap, so that primary advertising goes out and the broadcasts can be found;
+- with one BIG the controller keeps its advertising slots in every event anyway, so its event
+  limit (1.) is the real one. Measured lossless right up to it.
+- `--force` starts a BIG past this budget (with `broadcast_warning reason=over_budget`), for
+  loss measurements.
 
-`broadcast budget` shows `next_big_bis`, i.e. how many BISes one more BIG can take. The number
-also accounts for the controller's free BIGs and BISes.
+`broadcast budget` shows `next_big_bis`, i.e. how many BISes one more BIG can take: both checks,
+plus the controller's free BIGs and BISes.
 
-The model follows from the controller's reservations, and verification assumes the hardest case:
-the receiver stays synchronized to the PA. Every configuration at the budget limit passed without
-loss, with every BIG found, in the regular, ASan and coverage builds
-(`scripts/test.sh -m slow test_capacity.py`).
+**Measured capacity of one BIG** (`scripts/capacity.py broadcast`: the budget's number of BISes
+is started and received for 4 s by the simulated hearing aid, which stays synchronized to the PA;
+one more BIS is started with `--force`). Every configuration the tool accepts was received
+without loss and found (190 cases, 0 losses). The table shows BISes for 2M / 1M PHY; where
+encryption costs one BIS, the encrypted number is in parentheses:
 
-| Measurement (16_2, 2M, rtn=0, BIG 1 plain, the others encrypted) | result |
+| Preset | rtn=0 | rtn=2 | rtn=4 |
+|---|---|---|---|
+| 16_2 (10 ms, 40 B) | 8 / 8 | 6 / 4 (3) | 3 / 2 |
+| 24_2 (10 ms, 60 B) | 8 / 8 | 5 (4) / 3 | 3 / 1 |
+| 48_2 (10 ms, 100 B) | 8 / 6 | 3 / 2 | 2 / 1 |
+| 48_4 (10 ms, 120 B) | 8 / 5 | 3 / 1 | 2 (1) / 1 |
+| 48_6 (10 ms, 155 B) | 8 (7) / 4 | 2 / 1 | 1 / 0 |
+| 441_2 (44.1 kHz framed, 130 B) | 8 / 5 | 3 / 1 | 1 / 1 |
+| 16_1 (7.5 ms, 30 B) | 8 / 8 | 4 / 3 (2) | 2 / 1 |
+| 48_1 (7.5 ms, 75 B) | 8 / 5 (4) | 2 / 1 | 1 / 1 |
+| 48_5 (7.5 ms, 117 B) | 6 / 3 | 2 / 1 | 1 / 0 |
+
+**Several BIGs** (`scripts/capacity.py multi`, `scripts/test.sh -m slow test_capacity.py`):
+
+| Measurement (BIG 1 plain, the others encrypted) | result |
 |---|---|
-| 8 + 3, 7 + 4, 6 + 5 (**11 BIS**, the limit for 2 BIGs) | lossless (test) |
-| 3 + 3 + 2, 4 + 3 + 1, 2 + 3 + 3 (8 BIS, the limit for 3 BIGs) | lossless (test) |
-| 1 BIG: 8 BIS rtn=1, 3 BIS 48 kHz rtn=2/3, 6 BIS 24 kHz rtn=2 (up to 8.5 ms) | lossless |
-| 8 + 4, 3 + 3 + 3 | rejected by the budget (test) |
+| 16_2 rtn=0: 8 + 3, 7 + 4, 6 + 5 (**11 BIS**, the limit for 2 BIGs) | lossless (test) |
+| 16_2 rtn=0: 3 + 3 + 2, 4 + 3 + 1, 2 + 3 + 3 (8 BIS, the limit for 3 BIGs) | lossless (test) |
+| 48_4 rtn=0 2 + 2 | lossless |
+| 48_2 rtn=2 2 + 16_2 rtn=2 2, 24_2 rtn=1 3 + 2 + 16_2 2 | rejected by the budget |
+| 8 + 4, 3 + 3 + 3 (16_2) | rejected by the budget (test) |
 | before the patch 0006 fix: 8 + 3, 7 + 3, 7 + 2, 8 + 2 | 8–17% loss (PA on a BIG at the transmitter or at the receiver) |
 | before the patch 0006 fix: 4 + 4 + 3, 8 + 3 + 1 | AUX or primary advertising did not go out: the broadcast could not be found |
 
-Encryption costs only airtime (4 B MIC per PDU): the radio's hardware CCM encrypts, and the keys
-are computed once when the BIG starts. A configuration at the budget limit fits in plain text,
-but not encrypted (test).
+**Unicast** (`scripts/capacity.py unicast`): the music stream (48_2) to one hearing aid lost no
+frame next to 1 or 2 other connections (to a second hearing aid) with intervals of 30, 50, 60 or
+100 ms. Losses come only with a broadcast running next to the CIS (see "Found in simulation"),
+which is why the tool works in modes.
+
+Encryption costs only airtime (4 B MIC per PDU) and BIGInfo length: the radio's hardware CCM
+encrypts, and the keys are computed once when the BIG starts. 16_2 with 4 BIS, rtn=2 on 1M fits
+in plain text, but not encrypted (test).
 
 **BIGs with different intervals** (7.5 and 10 ms) meet every few events. They could avoid it only
 if their events together fit into the GCD of the intervals (2.5 ms), while the overhead alone is
@@ -488,8 +542,8 @@ Memory usage (`scripts/build.sh dk`):
 
 | Core | Flash | RAM |
 |---|---|---|
-| app (`ha_tool`) | 584 KB / 1 MB (57%), including 257 KB of frame table | 114 KB / 448 KB (25%) |
-| net (`hci_ipc` controller) | 164 KB / 256 KB (64%) | 59 KB / 64 KB (92%) |
+| app (`ha_tool`) | 585 KB / 1 MB (57%), including 257 KB of frame table | 114 KB / 448 KB (25%) |
+| net (`hci_ipc` controller) | 164 KB / 256 KB (64%) | 49 KB / 64 KB (76%) |
 
 Hardware optimizations:
 - **Zero flash writes:** no flash driver, settings or NVS in the image (`nm` shows no
@@ -498,15 +552,28 @@ Hardware optimizations:
   per SDU.
 - **Own controller** (`ha_tool/netcore.conf` instead of the sample configuration with every
   role): no peripheral, BIG reception, PA sync, PAST, DTM or large scan buffers. Net core RAM went
-  from 98% to 92% with 3 BIGs / 16 BIS instead of 2 / 6.
+  from 98% to 92% with 3 BIGs / 16 BIS instead of 2 / 6, then to 76% (table below).
 - **App core at 128 MHz** (`src/board.c`; the MDK boots at 64 MHz).
 - **CLI over UARTE with DMA at 1 Mbaud** (J-Link VCOM): an `EVT` line takes about 1 ms instead
   of 9 ms.
 - BIG encryption: the radio's hardware CCM; upstream Zephyr uses the CryptoCell-312 only as an
   entropy source (accelerating ECDH for mass pairing would require NCS).
 
-Every increase of the limits in `ha_tool/netcore.conf` must be checked with a DK build (the
-simulation does not check net core RAM).
+Net core RAM went from 59 KB (92%) to 49 KB (76%) without giving up a limit
+(`scripts/mem_report.sh` variants, each one run through the whole test suite):
+
+| Change in `ha_tool/netcore.conf` | RAM saved | Why it is enough |
+|---|---|---|
+| advertising / AUX / periodic sets 4 → 3 | 2.4 KB | one set per BIG; a BIG's set is deleted before it starts again |
+| ISO TX buffers 20 → 17 (+ host count on both cores) | 1.8 KB | 16 BIS with 1 SDU in flight each + spare; `audio_tx.c` gives 2 in flight only while they fit |
+| HCI event buffers 8 → 6 | 1.1 KB | also sizes the HCI command pool of `hci_ipc` |
+| heap 2 KB → 1 KB | 1.0 KB | only the IPC virtqueues (boot) and AES-CMAC of encrypted BIGs allocate |
+| controller RX buffers 4 → 3, advertising data buffers 3 → 2 | 0.6 KB | one connection-heavy and one update per BIG at a time |
+
+Price list for raising a limit again: about 0.8 KB per BIG (its three advertising sets), 0.6 KB
+per ISO TX buffer (one per BIS), 0.6 KB per HCI event buffer. Coded PHY stays (0.4 KB) because
+`bonding phy` offers it. Every increase of the limits in `ha_tool/netcore.conf` must be checked
+with a DK build (the simulation does not check net core RAM).
 
 1. Zephyr SDK (ARM toolchain), `nrfutil` / J-Link.
 2. `scripts/build.sh dk`. Builds `ha_tool` for `nrf5340dk/nrf5340/cpuapp` together with the
@@ -613,6 +680,11 @@ Found and fixed:
 | The simulated hearing aid's own advertising preempted its PA sync (`dut_sim`) | a flaky `test_broadcast_txpower` (1 failure in the coverage run, PA sync retries in 2 of 10 runs); radio dumps: the sink synced to every PA packet and aborted it 45 µs later, each time its own AUX_ADV_IND followed 846 µs after the PA | its advertising interval (30 ms) divides the PA interval (60 ms), so on an unlucky start the phase never moved and the sync failed (`0x3e`); test double only: it now pauses advertising while establishing the sync, 0 retries in 30 runs |
 | The simulated hearing aid leaked its broadcast sink on `bcast stop` (`dut_sim`) | a warning while debugging the above (`Failed to add sync as Receive State: -12`) | stopping a synced BIG is asynchronous, so the immediate delete failed and the BASS receive state stayed taken; now deleted after the `stopped` callback |
 | Ringtone / beep pattern after 71 minutes of streaming | review | `frame_count * frame_us` overflowed 32 bits and the on/off timing jumped |
+| 48_6 (155 B SDUs) went out as 2 PDUs per SDU | `scripts/capacity.py accept`: 48_6 stopped at 4 BISes | the controller's BIS PDU is limited by `ISO_TX_BUFFER_SIZE` − 8 B timestamp header = 152 B, so every SDU was split (BN=2): twice the air time. Buffers are now 163 B |
+| The controller silently lowered RTN; past its event limit it refused the BIG, which the budget did not know | acceptance matrix: BIGs "accepted" with 12–33 ms of air in a 10 ms interval; `ERR -22` for 48_6 with 7 BIS the budget allowed | the tool now models the controller's limit, refuses with the largest RTN that fits, and reads the real layout back (`broadcast_warning reason=layout`) |
+| Two refused BIGs left broadcast unusable until reset (patch 0012) | acceptance matrix: after two refusals every BIG got `ERR -5` (Memory Capacity Exceeded) | BIS streams of a refused LE Create BIG were never returned |
+| The simulated hearing aid sometimes never synchronized to a PA (`dut_sim`) | capacity matrix: one 7.5 ms encrypted BIG "not found" every run | it stopped scanning before the PA sync was established; it now scans until then |
+| `broadcast budget` promised one BIS more than `start` accepted | capacity matrix | its probe BIG had no name or PBP, so the controller limit was computed with too little advertising data |
 | Reconnecting the same identity failed with `ERR -22 connect failed` until reboot (patch 0010) | UX walk on the simulation (`mode broadcast`, `reset`, then the same flow again); narrowed down to any disconnection after volume control, visible when the identity id is reused | a tester could not reconnect a hearing aid after a session with volume control |
 | Volume control failed after any reconnection (patch 0011) | the new reconnection test; `source_error op=vol_set err=128` (Invalid Change Counter) once VCP write errors were reported at all | `le-source volume` silently did nothing on hearing aids whose volume had changed; VCP write errors are now reported as `source_error` |
 | A music start during an alert was dropped | code review | `le-source music start` while an alert played from idle answered `deferred`, then never played |

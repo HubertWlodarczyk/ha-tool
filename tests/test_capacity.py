@@ -59,15 +59,38 @@ def test_three_bigs_plain_and_encrypted(pair):
 def test_encryption_costs_air_time(pair):
     """The 4 octet MIC of encrypted PDUs: a BIG that just fits in plain does not fit encrypted."""
     ha, _ = pair
-    ha.cmd("broadcast 1 create name=Edge preset=16_2 bis=6 rtn=2")
+    ha.cmd("broadcast 1 create name=Edge preset=16_2 bis=4 rtn=2 phy=1m")
     assert ha.cmd("broadcast 1 show")["fits"] == "1"
     plain = int(ha.cmd("broadcast 1 show")["airtime_us"])
     ha.cmd("broadcast 1 delete")
-    ha.cmd("broadcast 1 create name=Edge preset=16_2 bis=6 rtn=2 code=Secret")
+    ha.cmd("broadcast 1 create name=Edge preset=16_2 bis=4 rtn=2 phy=1m code=Secret")
     show = ha.cmd("broadcast 1 show")
-    assert int(show["airtime_us"]) == plain + 6 * 3 * 4 * 4  # 4 octets, 2M, rtn=2, 6 BISes
+    assert int(show["airtime_us"]) == plain + 4 * 3 * 4 * 8  # 4 octets, 1M, rtn=2, 4 BISes
     assert show["fits"] == "0"
     assert ha.cmd("broadcast 1 start", check=False).errno == -7
+
+
+def test_controller_event_limit(tool):
+    """The controller refuses (or silently cuts repetitions of) a BIG whose event does not fit
+    the ISO interval next to its advertising slots: the tool checks it first and names the
+    largest rtn that fits; past it --force does not help."""
+    tool.cmd("broadcast 1 create name=Wide preset=16_2 bis=8 rtn=2")
+    assert tool.cmd("broadcast 1 show")["fits"] == "0"
+    rep = tool.cmd("broadcast 1 start --force", check=False)
+    assert rep.errno == -7 and rep.values["hint"] == "broadcast 1 set rtn=1"
+    tool.cmd("broadcast 1 set rtn=1")
+    assert tool.cmd("broadcast budget preset=16_2 rtn=1")["next_big_bis"] == "8"
+
+
+def test_largest_sdu_in_one_pdu(tool):
+    """48_6 (155 octet SDUs) goes out as one PDU per SDU with the requested repetitions: the
+    controller's ISO TX buffers hold SDU + timestamp header (with 160 octets it split every SDU
+    into 2 PDUs, BN=2, and only 4 BISes fitted)."""
+    tool.cmd("broadcast 1 create name=Big preset=48_6 bis=4 rtn=0")
+    m = tool.mark()
+    tool.cmd("broadcast 1 start")
+    tool.wait_evt("broadcast_started", big=1, timeout=15)
+    assert not [e for e in tool.events[m:] if e.name == "broadcast_warning"], tool.events[m:]
 
 
 def start_bigs(ha, cfg: tuple[int, ...]) -> None:

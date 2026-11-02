@@ -48,6 +48,25 @@ static struct k_work_delayable start_timeout[MAX_BIGS];
 /* Serialises big_start / big_stop between the shell and the start timeout (system workqueue) */
 static K_MUTEX_DEFINE(big_lock);
 
+/* What the controller actually laid out, against what the BIG asked for: repetitions it lowered
+ * on its own or SDUs split into several PDUs change the test (and the air time)
+ */
+static void check_layout(const struct big *big, struct bt_bap_stream *bap_stream)
+{
+	struct bt_iso_info info;
+
+	if (bap_stream->iso == NULL || bt_iso_chan_get_info(bap_stream->iso, &info) != 0 ||
+	    info.type != BT_ISO_CHAN_TYPE_BROADCASTER) {
+		return;
+	}
+
+	if (info.broadcaster.irc != big->qos.rtn + 1U || info.broadcaster.bn != 1U) {
+		cli_evt("broadcast_warning", "big=%d reason=layout rtn=%u rtn_air=%u bn=%u",
+			big_number(big), big->qos.rtn, info.broadcaster.irc - 1U,
+			info.broadcaster.bn);
+	}
+}
+
 static void stream_started(struct bt_bap_stream *bap_stream)
 {
 	int i;
@@ -61,6 +80,10 @@ static void stream_started(struct bt_bap_stream *bap_stream)
 	err = audio_tx_start(&big->bis[i].stream, &big->bis[i].tone);
 	if (err != 0) {
 		LOG_ERR("TX start BIG %d BIS %d failed: %d", big_number(big), i + 1, err);
+	}
+
+	if (big->started == 0) {
+		check_layout(big, bap_stream);
 	}
 
 	if (++big->started == big->bis_count) {

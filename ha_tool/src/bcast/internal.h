@@ -116,7 +116,10 @@ struct big {
 /* Budget all broadcasts share (budget.c) */
 #define BUDGET_PERIOD_US     10000U
 #define BIG_OVERHEAD_US      1000U
-#define ADV_RESERVE_ONE_US   2500U /* one BIG streaming */
+/* One BIG: the controller keeps the slots of its own advertising in every event, so its event
+ * limit (big_ctlr_max_rtn) is the real one; measured lossless up to it (scripts/capacity.py)
+ */
+#define ADV_RESERVE_ONE_US   1000U
 #define ADV_RESERVE_MULTI_US 3800U /* two or more */
 
 extern struct big bcast_bigs[MAX_BIGS];
@@ -164,6 +167,9 @@ uint32_t big_airtime_us(const struct big *big, const struct bt_bap_qos_cfg *qos)
 uint32_t big_cost_us(uint32_t air_us, uint32_t interval_us);
 
 uint32_t budget_used_us(const struct big *except);
+
+/* Largest RTN the controller lays out in one BIG event of `big` (-1: not even RTN 0) */
+int big_ctlr_max_rtn(const struct big *big, const struct bt_bap_qos_cfg *qos);
 
 void warn_interval_mix(const struct big *big);
 

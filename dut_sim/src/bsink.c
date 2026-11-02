@@ -192,8 +192,9 @@ static void scan_recv(const struct bt_le_scan_recv_info *info, struct net_buf_si
 		!!(adv.pbp_features & BT_PBP_ANNOUNCEMENT_FEATURE_STANDARD_QUALITY),
 		!!(adv.pbp_features & BT_PBP_ANNOUNCEMENT_FEATURE_HIGH_QUALITY), info->rssi);
 
-	(void)bt_le_scan_stop();
-
+	/* Scanning goes on until the sync is established: the controller needs it to receive the
+	 * AUX_ADV_IND with the SyncInfo (stopped here, the sync sometimes waited forever)
+	 */
 	bt_addr_le_copy(&param.addr, info->addr);
 	param.sid = info->sid;
 	param.skip = 0;
@@ -201,6 +202,7 @@ static void scan_recv(const struct bt_le_scan_recv_info *info, struct net_buf_si
 	dut_adv_hold(true);
 	err = bt_le_per_adv_sync_create(&param, &bs.pa_sync);
 	if (err != 0) {
+		(void)bt_le_scan_stop();
 		dut_adv_hold(false);
 		cli_evt("dut_bcast_error", "reason=pa_sync_create err=%d", err);
 		bs.state = ST_IDLE;
@@ -229,6 +231,7 @@ static void pa_synced(struct bt_le_per_adv_sync *sync, struct bt_le_per_adv_sync
 	}
 
 	bs.state = ST_PA_SYNCED;
+	(void)bt_le_scan_stop();
 	dut_adv_hold(false);
 	cli_evt("dut_bcast_pa_synced", "broadcast_id=0x%06X", bs.broadcast_id);
 
@@ -247,14 +250,18 @@ static void pa_term(struct bt_le_per_adv_sync *sync,
 
 	bs.pa_sync = NULL;
 	if (bs.state == ST_PA_SYNCING) {
-		/* Establishing the periodic sync can fail on a busy channel: scan again */
-		if (++bs.pa_tries < PA_SYNC_TRIES &&
-		    bt_le_scan_start(BT_LE_SCAN_PASSIVE, NULL) == 0) {
+		/* Establishing the periodic sync can fail on a busy channel: look again (the scan
+		 * is still running)
+		 */
+		const int scan_err = bt_le_scan_start(BT_LE_SCAN_PASSIVE, NULL);
+
+		if (++bs.pa_tries < PA_SYNC_TRIES && (scan_err == 0 || scan_err == -EALREADY)) {
 			LOG_WRN("PA sync failed (0x%02x), retrying", info->reason);
 			bs.state = ST_SCANNING;
 			return;
 		}
 
+		(void)bt_le_scan_stop();
 		dut_adv_hold(false);
 		cli_evt("dut_bcast_error", "reason=pa_sync_failed hci=0x%02x tries=%u",
 			info->reason, bs.pa_tries);
@@ -500,7 +507,7 @@ int bsink_init(void)
 
 void bsink_reset(void)
 {
-	if (bs.state == ST_SCANNING) {
+	if (bs.state == ST_SCANNING || bs.state == ST_PA_SYNCING) {
 		(void)bt_le_scan_stop();
 	}
 

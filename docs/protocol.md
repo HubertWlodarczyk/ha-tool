@@ -960,7 +960,7 @@ Data `BIS`: `bis` (int), `sg` (int), `location` (str), `cfg` (str), `rate` (int)
 | `broadcast_error` | `big` (int), `reason` (str), `started` (int), `bis` (int), `airtime_us` (int) |  |
 | `broadcast_started` | `big` (int), `broadcast_id` (hex), `name` (str), `bis` (int), `subgroups` (int), `encrypted` (bool), `airtime_us` (int) |  |
 | `broadcast_stopped` | `big` (int), `broadcast_id` (hex), `reason` (str) |  |
-| `broadcast_warning` | `big` (int), `reason` (str), `other` (int), `interval_us` (int), `other_us` (int), `airtime_us` (int), `other_airtime_us` (int) |  |
+| `broadcast_warning` | `big` (int), `reason` (str), `other` (int, optional), `interval_us` (int, optional), `other_us` (int, optional), `airtime_us` (int, optional), `other_airtime_us` (int, optional), `cost_us` (int, optional), `free_us` (int, optional), `rtn` (int, optional), `rtn_air` (int, optional), `bn` (int, optional) | A BIG started with --force: reason=interval_mix (next to a BIG of another interval) or over_budget (past the air time budget; cost_us, free_us); reason=layout: the controller laid the BIG out differently from what it asked for (rtn_air repetitions, bn PDUs per SDU) |
 | `bonding_confirm` | `id` (int), `passkey` (int) |  |
 | `bonding_connect_failed` | `id` (int), `peer` (addr), `hci` (str), `reason` (str) |  |
 | `bonding_connected` | `id` (int), `peer` (addr), `local` (addr), `bonded` (bool) |  |

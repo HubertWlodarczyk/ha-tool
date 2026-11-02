@@ -201,7 +201,8 @@ def test_airtime_limit_and_rtn_override(pair):
     ha.cmd("broadcast 1 create name=Heavy preset=48_6 bis=3")
     assert ha.cmd("broadcast 1 show")["fits"] == "0"
     rep = ha.cmd("broadcast 1 start", check=False)
-    assert not rep.ok and rep.errno == -7 and "not enough air time" in rep.raw  # -E2BIG
+    # -E2BIG: the controller lays out at most rtn=1 for 3 BISes of 48_6, and says what to set
+    assert not rep.ok and rep.errno == -7 and rep.values["hint"] == "broadcast 1 set rtn=1"
 
     ha.cmd("broadcast 1 set rtn=1")
     assert ha.cmd("broadcast 1 show")["fits"] == "1"

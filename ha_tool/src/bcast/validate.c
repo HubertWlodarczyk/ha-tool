@@ -104,6 +104,7 @@ static int check_resources(const struct shell *sh, const struct big *big,
 {
 	uint32_t total = big->bis_count;
 	uint32_t air;
+	int ctlr_rtn;
 
 	for (int b = 0; b < MAX_BIGS; b++) {
 		const struct big *other = &bcast_bigs[b];
@@ -134,15 +135,48 @@ static int check_resources(const struct shell *sh, const struct big *big,
 			       CONFIG_HA_BCAST_MAX_BIS_TOTAL);
 	}
 
+	/* The controller's own layout of the event: not bypassed by --force (it would refuse) */
+	ctlr_rtn = big_ctlr_max_rtn(big, qos);
+	if (ctlr_rtn < (int)qos->rtn) {
+		char hint[40];
+
+		if (ctlr_rtn < 0) {
+			return cli_err_hint(
+				sh, -E2BIG, "broadcast budget",
+				"BIG %d: %u BISes do not fit one %u us event of the "
+				"controller (fewer BISes, a faster PHY or a smaller preset)",
+				big_number(big), big->bis_count, qos->interval);
+		}
+
+		snprintf(hint, sizeof(hint), "broadcast %d set rtn=%d", big_number(big), ctlr_rtn);
+		return cli_err_hint(
+			sh, -E2BIG, hint,
+			"BIG %d: %u repetitions do not fit one event of the controller with "
+			"%u BISes (at most %d)",
+			big_number(big), qos->rtn, big->bis_count, ctlr_rtn);
+	}
+
 	air = big_airtime_us(big, qos);
 	if (budget_used_us(big) + big_cost_us(air, qos->interval) > budget_limit_us(big)) {
+		const uint32_t free_us =
+			budget_limit_us(big) - MIN(budget_used_us(big), budget_limit_us(big));
+
+		/* Past the budget the controller still starts the BIG, but its events or the
+		 * advertising trains collide: allowed for measurements, never silently
+		 */
+		if (force) {
+			cli_evt("broadcast_warning",
+				"big=%d reason=over_budget airtime_us=%u cost_us=%u free_us=%u",
+				big_number(big), air, big_cost_us(air, qos->interval), free_us);
+			return 0;
+		}
+
 		/* Short: it is also the reason of a RESULT line; the details: broadcast budget */
 		return cli_err_hint(
 			sh, -E2BIG, "broadcast budget",
 			"not enough air time: BIG %d needs %u us, %u us free (lower rtn=, "
 			"fewer BISes or a smaller preset)",
-			big_number(big), big_cost_us(air, qos->interval),
-			budget_limit_us(big) - MIN(budget_used_us(big), budget_limit_us(big)));
+			big_number(big), big_cost_us(air, qos->interval), free_us);
 	}
 
 	return 0;

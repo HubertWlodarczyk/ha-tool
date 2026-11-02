@@ -108,7 +108,12 @@ public final class Protocol {
                 "interval_us", "int",
                 "other_us", "int",
                 "airtime_us", "int",
-                "other_airtime_us", "int"));
+                "other_airtime_us", "int",
+                "cost_us", "int",
+                "free_us", "int",
+                "rtn", "int",
+                "rtn_air", "int",
+                "bn", "int"));
         m.put("bonding_confirm", map("id", "int", "passkey", "int"));
         m.put("bonding_connect_failed", map("id", "int", "peer", "addr", "hci", "str", "reason", "str"));
         m.put("bonding_connected", map("id", "int", "peer", "addr", "local", "addr", "bonded", "bool"));

@@ -111,3 +111,14 @@ patches:
     email: hubert.wlodarczyk.pl@gmail.com
     date: 2026-11-02
     upstreamable: true
+  # LE Create BIG acquired the BIS streams before its last checks (event spacing within the ISO
+  # interval next to the advertising slots); when those refused the BIG (Invalid Parameters) the
+  # streams were never returned. Two refused 8-BIS BIGs used up the pool of 16 and every later
+  # BIG failed with Memory Capacity Exceeded until reset (found by scripts/capacity.py accept).
+  - path: zephyr/0012-controller-big-create-release-streams-on-error.patch
+    sha256sum: 32c17a199eadf49f5d4dd350eb4cabece24492bd5d0095ac0e626811a5c842e0
+    module: zephyr
+    author: Hubert Włodarczyk
+    email: hubert.wlodarczyk.pl@gmail.com
+    date: 2026-11-02
+    upstreamable: true

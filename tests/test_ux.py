@@ -257,7 +257,7 @@ def test_bulk_operations_report_each_big(pair):
     assert results == {"1": "started", "2": "started", "3": "failed"}
     assert rep.errno == -7 and "2 of 3" in rep.raw  # -E2BIG of BIG 3
     heavy = next(d for d in rep.data if d["big"] == "3")
-    assert "not enough air time" in heavy["reason"]
+    assert "fit one event of the controller" in heavy["reason"]
     assert ha.cmd("broadcast 3 show")["state"] == "error"
     pct = ha.cmd("broadcast budget")
     assert float(pct["used_pct"]) > 0 and len(pct.data) == 2
