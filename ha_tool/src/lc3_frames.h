@@ -20,8 +20,11 @@
 /* Largest frame of the table (48_6); lc3_frames.c checks it, audio_tx.c against the ISO MTU */
 #define LC3_TAB_MAX_OCTETS 155
 
-/* Level of the stored frames; the gain field can only lower it */
-#define LC3_TAB_LEVEL_MAX 0
+/* The frames are stored at 0 dBFS and the gain field only lowers them. At the lower bitrates the
+ * decoder overshoots a full scale sine by up to 0.7 dB and clips it (3rd harmonic at -30 dBc),
+ * so the highest level keeps headroom; lc3gen checks that no tone gets near full scale there.
+ */
+#define LC3_TAB_LEVEL_MAX (-2)
 #define LC3_TAB_LEVEL_MIN (-40)
 
 struct lc3_tab_cfg {

@@ -52,7 +52,7 @@ def test_broadcast_soak(pair):
     while time.monotonic() - start < SOAK_S:
         bis = rng.randint(1, 6)
         tones[bis - 1] = rng.choice(range(200, 2000, 50))
-        level = rng.randint(-30, 0)
+        level = rng.randint(-30, -2)
         ha.cmd(f"broadcast 1 bis tone {bis} freq={tones[bis - 1]} level={level}")
         time.sleep(1)
 

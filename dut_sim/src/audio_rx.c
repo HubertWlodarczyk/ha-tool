@@ -8,7 +8,8 @@
  * Receive-side audio check: LC3-decodes every frame and estimates the tone frequency from the
  * spacing of zero crossings (with hysteresis) inside each non-silent frame, so tone patterns
  * (ringtone, beeps) and their on/off edges do not bias the result. Reported once a second as:
- *   EVT dut_audio src=<label> freq=<Hz> level=<dBFS> active=<%> frames=<n> lost=<n>
+ *   EVT dut_audio src=<label> freq=<Hz> level=<dBFS> active=<%> frames=<n> lost=<n> clip=<n>
+ * clip counts decoded samples at full scale: a clipped tone (harmonics, heard as distortion).
  */
 
 #include <errno.h>
@@ -80,13 +81,14 @@ static void report(struct audio_rx *rx)
 	/* Peak level in 1/10 dB */
 	const int level = rx->peak > 0 ? (int)lroundf(200.0f * log10f(rx->peak / 32767.0f)) : -990;
 
-	cli_evt("dut_audio", "src=%s freq=%u level=%s%d.%d active=%u frames=%u lost=%u", rx->label,
-		freq, level < 0 ? "-" : "", abs(level) / 10, abs(level) % 10,
-		rx->active_frames * 100U / rx->frames, rx->frames, rx->lost);
+	cli_evt("dut_audio", "src=%s freq=%u level=%s%d.%d active=%u frames=%u lost=%u clip=%u",
+		rx->label, freq, level < 0 ? "-" : "", abs(level) / 10, abs(level) % 10,
+		rx->active_frames * 100U / rx->frames, rx->frames, rx->lost, rx->clipped);
 
 	rx->frames = 0;
 	rx->active_frames = 0;
 	rx->lost = 0;
+	rx->clipped = 0;
 	rx->crossings = 0;
 	rx->span_samples = 0;
 	rx->peak = 0;
@@ -144,6 +146,8 @@ static void analyze(struct audio_rx *rx, const int16_t *pcm)
 		const int16_t mag = s < 0 ? (s == INT16_MIN ? INT16_MAX : -s) : s;
 
 		frame_peak = MAX(frame_peak, mag);
+		/* The decoder saturates to int16: a sample at the limit was clipped */
+		rx->clipped += mag >= INT16_MAX - 1;
 		if ((s > HYSTERESIS && rx->sign < 0) || (s < -HYSTERESIS && rx->sign > 0)) {
 			frame_crossings++;
 			first = first < 0 ? i : first;

@@ -17,9 +17,12 @@
  * g_idx being the 8 bit global gain at a fixed position of the side information (after the
  * bandwidth and the nq field), so the firmware sets any level by rewriting that field.
  *
- * Self test (generation fails otherwise): every entry, decoded in a loop, has the right
- * frequency, a flat envelope across the loop point, enough SNR, and the expected level after
- * the gain field was rewritten.
+ * Headroom: at the lower bitrates the decoder overshoots a full scale sine by up to 0.7 dB and
+ * clips it, so the firmware's highest level is LEVEL_MAX (-2 dBFS, lc3_frames.h), not 0 dBFS.
+ *
+ * Self test (generation fails otherwise): every entry, decoded in a loop at LEVEL_MAX, -20 and
+ * -40 dBFS, has the right frequency, a flat envelope across the loop point, enough SNR, the
+ * expected level after the gain field was rewritten, and peaks below MAX_PEAK (no clipping).
  *
  * Build and run: scripts/gen_lc3_frames.sh
  */
@@ -46,13 +49,17 @@
 #define F_MIN         100.0
 #define F_MAX         8000.0
 #define LEVEL_MIN     -40           /* dBFS, lowest level the firmware may set */
+#define LEVEL_MAX     -2            /* dBFS, highest level (LC3_TAB_LEVEL_MAX) */
 #define GAIN_STEP     (20.0 / 28.0) /* dB per g_idx step */
 
-/* Self test limits. The worst cases are the lowest bitrates (8_1: 26 octets = 28 kbit/s). */
-#define MIN_SNR      20.0 /* dB, noise + distortion vs. the tone */
+/* Self test limits. The worst cases are the lowest bitrates (8_2: 30 octets = 24 kbit/s gives
+ * about 30 dB, the same as a continuous encoding; scripts/gen_lc3_frames.sh --probe).
+ */
+#define MIN_SNR      28.0 /* dB, noise + distortion vs. the tone */
 #define MAX_ENV      1.0  /* dB, frame RMS variation incl. across the loop point */
-#define MAX_REF_ERR  1.0  /* dB, decoded level vs. 0 dBFS */
+#define MAX_REF_ERR  1.0  /* dB, decoded level at LEVEL_MAX vs. nominal */
 #define MAX_GAIN_ERR 0.3  /* dB, level after rewriting g_idx vs. reference + delta */
+#define MAX_PEAK     0.95 /* decoded peak (full scale 1.0) at LEVEL_MAX: -0.45 dBFS */
 
 struct cfg {
 	const char *name;
@@ -75,7 +82,7 @@ static uint8_t *blob;
 static size_t blob_len, blob_cap;
 
 static int max_cycle = 2;
-static double min_snr = 1e9, worst_env, worst_lvl;
+static double min_snr = 1e9, worst_env, worst_lvl, worst_peak;
 static const char *worst_snr_at = "";
 
 static void die(const char *fmt, ...)
@@ -145,10 +152,11 @@ static void set_gidx(uint8_t *frame, int len, int bit, int v)
 }
 
 /* Decodes `cycle` frames in a loop (with the gain field shifted by `delta`) and checks frequency,
- * level, envelope and SNR against a sine of `f` Hz (in coding domain) at `level_db`.
+ * level, envelope, SNR and peak against a sine of `f` Hz (in coding domain) at `level_db`; `ref`:
+ * the reference measurement (looser level tolerance).
  */
 static double check(const struct cfg *c, double f, const uint8_t *frames, int k, int delta,
-		    double level_db, const char *what)
+		    double level_db, bool ref, const char *what)
 {
 	static float pcm[CHECK_LOOPS * MAX_LOOP * MAX_NS];
 	uint8_t frame[MAX_BYTES];
@@ -159,7 +167,7 @@ static double check(const struct cfg *c, double f, const uint8_t *frames, int k,
 	lc3_decoder_t dec = lc3_setup_decoder(c->dt_us, sr, 0, mem);
 	const int skip = 2 * ns; /* decoder start-up (overlap) */
 	double sum_ss = 0, sum_cc = 0, sum_sc = 0, sum_xs = 0, sum_xc = 0, energy = 0;
-	double fmin_rms = 1e9, fmax_rms = 0;
+	double fmin_rms = 1e9, fmax_rms = 0, peak = 0;
 	int n = 0;
 
 	for (int i = 0; i < nframes; i++) {
@@ -186,6 +194,7 @@ static double check(const struct cfg *c, double f, const uint8_t *frames, int k,
 		sum_xs += x * s;
 		sum_xc += x * co;
 		energy += x * x;
+		peak = fabs(x) > peak ? fabs(x) : peak;
 	}
 
 	const double det = sum_ss * sum_cc - sum_sc * sum_sc;
@@ -212,19 +221,21 @@ static double check(const struct cfg *c, double f, const uint8_t *frames, int k,
 	const double env_db = 20 * log10(fmax_rms / fmin_rms);
 	const double lvl_err = fabs(amp_db - level_db);
 
-	if (delta == 0 && snr < min_snr) {
+	if (snr < min_snr) {
 		min_snr = snr;
 		worst_snr_at = c->name;
 	}
 
 	worst_env = env_db > worst_env ? env_db : worst_env;
 	worst_lvl = lvl_err > worst_lvl ? lvl_err : worst_lvl;
+	worst_peak = peak > worst_peak ? peak : worst_peak;
 
 	/* A tone at another frequency fails the SNR of the fit at f */
-	if (snr < MIN_SNR || env_db > MAX_ENV ||
-	    lvl_err > (delta == 0 ? MAX_REF_ERR : MAX_GAIN_ERR)) {
-		die("%s %.2f Hz %s: snr=%.1f dB envelope=%.2f dB level=%.2f dB (want %.2f)",
-		    c->name, f, what, snr, env_db, amp_db, level_db);
+	if (snr < MIN_SNR || env_db > MAX_ENV || peak > MAX_PEAK ||
+	    lvl_err > (ref ? MAX_REF_ERR : MAX_GAIN_ERR)) {
+		die("%s %.2f Hz %s: snr=%.1f dB envelope=%.2f dB level=%.2f dB (want %.2f) "
+		    "peak=%.3f",
+		    c->name, f, what, snr, env_db, amp_db, level_db, peak);
 	}
 
 	return amp_db;
@@ -329,6 +340,8 @@ static uint32_t add_tone(const struct cfg *c, struct cfg_table *t, int m, int ns
 	char what[32];
 	bool stable;
 	const int k = encode_tone(c, f, k0, frames, &stable);
+	/* Same rounding as the firmware (audio_tx.c level_to_delta) */
+	const int max_delta = (LEVEL_MAX * 14 - 5) / 10;
 	double ref;
 
 	for (int i = 0; i < k; i++) {
@@ -337,11 +350,13 @@ static uint32_t add_tone(const struct cfg *c, struct cfg_table *t, int m, int ns
 		t->gidx_min = MIN(g, t->gidx_min);
 	}
 
-	/* Reference level 0 dBFS, then the gain field rewritten for -20 and -40 dB */
-	ref = check(c, f, frames, k, 0, 0.0, "0dB");
+	/* Reference at the highest level (the gain field rewritten as by the firmware), then
+	 * -20 and -40 dB relative to it
+	 */
+	ref = check(c, f, frames, k, max_delta, max_delta * GAIN_STEP, true, "max");
 	for (int d = -28; d >= (int)(LEVEL_MIN / GAIN_STEP); d -= 28) {
 		snprintf(what, sizeof(what), "gain%+d", d);
-		check(c, f, frames, k, d, ref + d * GAIN_STEP, what);
+		check(c, f, frames, k, d, ref + (d - max_delta) * GAIN_STEP, false, what);
 	}
 
 	total_tones++;
@@ -388,8 +403,9 @@ static void print_summary(void)
 		long_loops);
 	fprintf(stderr,
 		"%d tones, %zu bytes; min SNR %.1f dB (%s), envelope %.2f dB, level error %.2f "
-		"dB\n",
-		total_tones, blob_len, min_snr, worst_snr_at, worst_env, worst_lvl);
+		"dB, peak at %d dBFS %.2f dBFS\n",
+		total_tones, blob_len, min_snr, worst_snr_at, worst_env, worst_lvl, LEVEL_MAX,
+		20 * log10(worst_peak));
 }
 
 static int max_octets(void)

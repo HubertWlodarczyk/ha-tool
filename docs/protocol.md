@@ -883,7 +883,7 @@ Mode: `broadcast`
 | `octets=` | int |  |
 | `freq=` | int | Hz |
 | `exact=` | bool |  |
-| `level=` | int | -40..0; dBFS |
+| `level=` | int | -40..-2; dBFS |
 | `pattern=` | enum | cont\|ring\|beep |
 
 Reply: `big` (int), `bis` (int), `sg` (int), `location` (str), `cfg` (str), `freq` (int), `freq_actual` (float), `level` (int), `level_actual` (float)
@@ -904,7 +904,7 @@ Mode: `broadcast`
 | `octets=` | int |  |
 | `freq=` | int | Hz |
 | `exact=` | bool |  |
-| `level=` | int | -40..0; dBFS |
+| `level=` | int | -40..-2; dBFS |
 | `pattern=` | enum | cont\|ring\|beep |
 
 Reply: `big` (int), `bis` (int), `sg` (int), `location` (str), `cfg` (str), `freq` (int), `freq_actual` (float), `level` (int), `level_actual` (float)
@@ -921,7 +921,7 @@ Mode: `broadcast`
 | `bis (positional)` | int | BIS number within the BIG |
 | `freq=` | int | Hz |
 | `exact=` | bool |  |
-| `level=` | int | -40..0; dBFS |
+| `level=` | int | -40..-2; dBFS |
 | `pattern=` | enum | cont\|ring\|beep |
 
 Reply: `big` (int), `bis` (int), `sg` (int), `location` (str), `cfg` (str), `freq` (int), `freq_actual` (float), `level` (int), `level_actual` (float)

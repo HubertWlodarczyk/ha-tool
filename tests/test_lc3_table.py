@@ -106,14 +106,37 @@ def test_level_by_global_gain(pair):
     dut.cmd("bcast scan name=Lvl")
     dut.wait_evt("dut_bcast_stream", since=m, state="started", timeout=SYNC_TIMEOUT)
 
-    for level in (-6, -20, -30, -40, -3):
+    for level in (-6, -20, -30, -40, -2):
         actual = float(ha.cmd(f"broadcast 1 bis tone 1 freq=1000 level={level}")["level_actual"])
         assert abs(actual - level) <= 0.36
         m = dut.mark()
         dut.wait_evt("dut_audio", since=m, src="bcast_bis1", timeout=10)  # spans the change
         ev = dut.wait_evt("dut_audio", since=dut.mark(), src="bcast_bis1", timeout=10)
         assert abs(float(ev["level"]) - actual) <= 1.0, (level, ev)
+        assert int(ev["clip"]) == 0, (level, ev)
         assert near(1000)(ev["freq"]), ev
+
+
+@pytest.mark.parametrize(("cfg", "freq"), [("8_1", 133), ("16_2", 1000), ("48_2", 2000)])
+def test_highest_level_is_not_clipped(pair, cfg, freq):
+    """At the lower bitrates the decoder overshoots a full scale sine and clips it (heard as
+    distortion), so the highest level is -2 dBFS: decoded at the hearing aid without a single
+    sample at full scale, also for the table's worst tone (8_1, 133 Hz). 0 dBFS is refused."""
+    ha, dut = pair
+    ha.cmd(f"broadcast 1 create name=Max preset={cfg} bis=1")
+    assert ha.cmd(f"broadcast 1 bis tone 1 freq={freq} level=0", check=False).errno == -22
+    assert ha.cmd("limits")["level_max"] == "-2"
+    ha.cmd(f"broadcast 1 bis tone 1 freq={freq} level=-2")
+    ha.cmd("broadcast 1 start")
+    ha.wait_evt("broadcast_started", timeout=15)
+
+    m = dut.mark()
+    dut.cmd("bcast scan name=Max")
+    dut.wait_evt("dut_bcast_stream", since=m, state="started", timeout=SYNC_TIMEOUT)
+    dut.wait_evt("dut_audio", since=m, src="bcast_bis1", timeout=10)  # spans the sync
+    ev = dut.wait_evt("dut_audio", since=dut.mark(), src="bcast_bis1", timeout=10)
+    assert int(ev["clip"]) == 0 and int(ev["lost"]) == 0, ev
+    assert -3.5 <= float(ev["level"]) <= -0.5, ev
 
 
 def test_mixed_frame_durations_and_rates(pair):

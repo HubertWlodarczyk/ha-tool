@@ -455,7 +455,7 @@ BIS parameters:
 | `octets` | number of LC3 data octets |
 | `freq` | tone frequency in Hz; `0` means silence |
 | `exact` | reject the configuration if the exact tone does not exist |
-| `level` | level from `-40` to `0` dBFS |
+| `level` | level from `-40` to `-2` dBFS (0 dBFS would clip in the decoder at low bitrates) |
 | `pattern` | `cont`, `ring` or `beep` |
 
 The names `subgroup` and `location` are recommended in the user-facing layer.

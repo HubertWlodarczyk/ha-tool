@@ -245,8 +245,6 @@ static void send_one(struct tx_slot *slot)
 		memcpy(out, slot->cfg->silence, octets);
 	}
 
-	slot->frame_count++;
-
 	K_SPINLOCK(&bind_lock) {
 		slot->inflight++;
 	}
@@ -261,6 +259,10 @@ static void send_one(struct tx_slot *slot)
 		return;
 	}
 
+	/* Only a frame that was queued advances the tone: after a failed send the same frame goes
+	 * next, so the tone keeps its phase (skipping one frame of a 2-frame cycle inverts it).
+	 */
+	slot->frame_count++;
 	slot->seq_num++;
 }
 

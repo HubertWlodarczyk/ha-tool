@@ -40,6 +40,7 @@ struct audio_rx {
 	uint32_t frames;
 	uint32_t active_frames;
 	uint32_t lost;
+	uint32_t clipped;      /* decoded samples at full scale: the tone was clipped */
 	uint32_t crossings;    /* half periods counted inside frames */
 	uint32_t span_samples; /* samples spanned by those half periods */
 	int8_t sign;

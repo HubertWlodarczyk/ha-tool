@@ -684,7 +684,7 @@ commands:
   - name: level
     type: int
     unit: dBFS
-    range: [-40, 0]
+    range: [-40, -2]
   - name: pattern
     type: enum
     values: [cont, ring, beep]
@@ -714,7 +714,7 @@ commands:
   - name: level
     type: int
     unit: dBFS
-    range: [-40, 0]
+    range: [-40, -2]
   - name: pattern
     type: enum
     values: [cont, ring, beep]
@@ -736,7 +736,7 @@ commands:
   - name: level
     type: int
     unit: dBFS
-    range: [-40, 0]
+    range: [-40, -2]
   - name: pattern
     type: enum
     values: [cont, ring, beep]

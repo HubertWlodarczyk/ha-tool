@@ -1068,7 +1068,7 @@ class _BroadcastBis:
         location: mono|left|right|front_center|back_left|back_right|side_left|side_right
         rate: 8|16|24|32|44.1|48
         freq: Hz
-        level: -40..0, dBFS
+        level: -40..-2, dBFS
         pattern: cont|ring|beep
         Reply: big (int), bis (int), sg (int), location (str), cfg (str), freq (int), freq_actual
         (float), level (int), level_actual (float)
@@ -1103,7 +1103,7 @@ class _BroadcastBis:
         location: mono|left|right|front_center|back_left|back_right|side_left|side_right
         rate: 8|16|24|32|44.1|48
         freq: Hz
-        level: -40..0, dBFS
+        level: -40..-2, dBFS
         pattern: cont|ring|beep
         Reply: big (int), bis (int), sg (int), location (str), cfg (str), freq (int), freq_actual
         (float), level (int), level_actual (float)
@@ -1131,7 +1131,7 @@ class _BroadcastBis:
     ) -> Reply:
         """Tone of a BIS, also live (reply: the tone actually sent)
         freq: Hz
-        level: -40..0, dBFS
+        level: -40..-2, dBFS
         pattern: cont|ring|beep
         Reply: big (int), bis (int), sg (int), location (str), cfg (str), freq (int), freq_actual
         (float), level (int), level_actual (float)

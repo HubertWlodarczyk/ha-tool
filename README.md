@@ -9,7 +9,7 @@ Java** libraries for automation.
 | **Identities and bonds** (`bonding`) | Every virtual identity has its own BLE identity (address, IRK, keys) and connects with a changing RPA like a real phone. Everything lives in RAM only (**the tool never writes to flash**), so a board reset clears the list. Identities connect and bond with the hearing aid one after another: filling the bond list, checking which device the hearing aid evicted, reconnections, "the phone forgot the device". Just Works, passkey or numeric comparison pairing; connection parameters (interval, latency, timeout, PHY, data length). Connect by address or by Bluetooth name. |
 | **LE Audio source** (`le-source`, e.g. a phone) | LE Audio unicast with the Media, Ringtone, Conversational and Alerts contexts. Calls through TBS/CCP (incoming, outgoing, answered on the hearing aid, hold, end), music through MCS/MCP (play/pause also from the hearing aid), volume through VCP, and, like a companion app: presets (HAS), microphone (MICP/AICS) and balance (VOCS). Losses of the hearing aid's microphone stream are counted from sequence numbers. |
 | **Auracast** (`broadcast`) | A broadcast builder: the tester composes the BIG, its subgroups (preset, language, context) and BISes (channel, sampling rate, octets, tone). Up to 3 BIGs at once, up to 8 BIS and 4 subgroups per BIG, up to 11 BIS in total without loss (e.g. 8 + 3). Encryption (each BIG with its own code), PBP (SQ/HQ), PHY, RTN, interval, TX power; a shared airtime budget across all BIGs (`broadcast budget`); operations on every BIG (`--all`) with a result per BIG; tone, level, power and metadata changed live. |
-| **Audio** | Ready-made LC3 frames from a table (no encoder on the board): all 16 BAP configurations (8–48 kHz including 44.1, 7.5 and 10 ms frames), about 2070 tones up to 8 kHz, level from −40 to 0 dBFS. A separate tone per BIS / stream, ringtone and beep patterns. |
+| **Audio** | Ready-made LC3 frames from a table (no encoder on the board): all 16 BAP configurations (8–48 kHz including 44.1, 7.5 and 10 ms frames), about 2070 tones up to 8 kHz, level from −40 to −2 dBFS. A separate tone per BIS / stream, ringtone and beep patterns. |
 
 Until a board is available, everything runs in **simulation** (Zephyr `nrf5340bsim` +
 BabbleSim). Tests use a simulated hearing aid, **`dut_sim`**, which decodes the audio and reports
@@ -106,7 +106,7 @@ All of them are suitable for upstream submission.
 
 ```
 scripts/build.sh              # ha_tool + dut_sim for nrf5340bsim (host gcc, no Zephyr SDK)
-scripts/test.sh               # 108 tests in simulation, about 8 min (including the library tests)
+scripts/test.sh               # 111 tests in simulation, about 8 min (including the library tests)
 scripts/test.sh -m slow       # 11 long ones: fuzzing, soak, cycles, event storm, budget limit (about 12 min)
 scripts/test.sh -k phone      # selected tests
 HA_SIM_SPEED=2 scripts/test.sh   # simulation 2x faster than real time
@@ -282,7 +282,7 @@ states: `draft` (incomplete), `ready` (at least one subgroup and one BIS), `acti
 | `broadcast <n> create [name=] [code=] [pbp=] [id=] [phy=] [interval=7.5\|10] [rtn=] [latency=] [pd=] [pa=] [packing=] [framing=] [preset=] [bis=N] [lang=] [ctx=] [program=]` | New BIG (draft). With `preset=` or `bis=`, one subgroup and N BISes right away (mono, L/R, L/R/C ...), tones 500, 1000, 1500 ... Hz. Existing BIG: `ERR -17 hint="broadcast <n> delete"`. |
 | `broadcast <n> set ...`, `broadcast <n> delete` | Change BIG parameters (not while transmitting); delete. |
 | `broadcast <n> subgroup add\|set <sg>\|delete <sg>\|list` | Subgroups. `set` on an active BIG changes only `lang`, `ctx`, `program` (one subgroup: a Zephyr API limitation). `delete` only without BISes; numbers stay contiguous. |
-| `broadcast <n> bis add\|set <bis>\|delete <bis>\|list` | BISes: `subgroup=`, `location=mono\|left\|right\|front_center\|back_left\|back_right\|side_left\|side_right`, `rate=`, `octets=`, `freq=`, `exact=1`, `level=-40..0`, `pattern=cont\|ring\|beep`. The reply gives `cfg`, `freq_actual` and `level_actual`; a combination outside the LC3 table is `ERR -95` with a list. |
+| `broadcast <n> bis add\|set <bis>\|delete <bis>\|list` | BISes: `subgroup=`, `location=mono\|left\|right\|front_center\|back_left\|back_right\|side_left\|side_right`, `rate=`, `octets=`, `freq=`, `exact=1`, `level=-40..-2`, `pattern=cont\|ring\|beep`. The reply gives `cfg`, `freq_actual` and `level_actual`; a combination outside the LC3 table is `ERR -95` with a list. |
 | `broadcast <n> bis tone <bis> [freq=] [level=] [pattern=] [exact=]` | Tone, also live. |
 | `broadcast <n> start [--force]`, `stop`, `restart` | Validation (subgroups with BISes, frame duration, table, **airtime budget of all BIGs**), then start; the error says what is missing. A BIG with a different interval than the running ones: `ERR -33`; `--force` starts it anyway (`EVT broadcast_warning reason=interval_mix`). |
 | `broadcast start\|stop\|restart --all` | On every configured BIG: one `RESULT big= name= result= errno= reason=` line each; if any failed, the reply is `ERR` ("2 of 3 BIGs started"). |
@@ -307,11 +307,27 @@ the same library as in `dut_sim`), and the firmware only copies ready frames.
   (read-only).
 - **Level without extra frames:** the LC3 decoder scales the whole spectrum by `10^(g_idx/28)`,
   and the 8-bit `g_idx` (global gain) sits at a fixed position in the frame's side information.
-  The firmware rewrites that field while copying: any level from −40 to 0 dBFS in 0.71 dB steps.
+  The firmware rewrites that field while copying: any level from −40 to −2 dBFS in 0.71 dB steps.
+- **Headroom:** at the lower bitrates (8_x … 32_x, 48_1, 48_2) the decoder overshoots a full
+  scale sine by up to 0.7 dB and clips it: a 3rd harmonic at about −30 dBc, heard as distortion.
+  The highest level is therefore −2 dBFS (decoded peak at most −1.3 dBFS over the whole table);
+  0 dBFS is refused.
 - **Generator self-test** (generation fails if it does not pass): every tone decoded in a ×50
-  loop gives the right frequency, a flat envelope across cycle boundaries (≤ 1 dB) and an SNR
-  ≥ 20 dB (worst: 28 dB at the 26-octet 8_1); the level after rewriting `g_idx` matches within
-  0.3 dB.
+  loop at −2, −20 and −40 dBFS gives the right frequency, a flat envelope across cycle boundaries
+  (≤ 1 dB), an SNR ≥ 28 dB, a peak below −0.45 dBFS, and the level after rewriting `g_idx`
+  within 0.3 dB.
+- **Tone quality** (`scripts/gen_lc3_frames.sh --probe`: every tone and level next to a
+  continuous encoding of the same sine, in `build/lc3probe/report.csv`; `--probe wav ...` writes
+  listening samples, including a lost frame and a phase jump). The looped table is as clean as a
+  continuous encoding; what remains is the codec at that bitrate. SNR (noise + distortion) at
+  −12 dBFS, worst / median tone:
+
+  | Config | 8_2 | 16_2 | 24_2 | 32_2 | 48_2 | 48_4 | 48_6 |
+  |---|---|---|---|---|---|---|---|
+  | SNR dB | 30 / 39 | 32 / 50 | 40 / 59 | 57 / 65 | 43 / 69 | 63 / 74 | 71 / 80 |
+
+  At 8_x and 16_x the coding noise sits in lines ±100–200 Hz around the tone (the frame rate) and
+  can be heard on a pure tone as roughness; prefer 24_2 or above for listening tests.
 - Regeneration: `scripts/gen_lc3_frames.sh` (deterministic; `--max-cycle 4` gives a 2× denser
   grid, about 1.4 MB, i.e. external QSPI flash territory).
 
@@ -395,7 +411,8 @@ broadcast 1 start
 
 Key events:
 - `dut_stream state=enabled|metadata|started|... dir= ctx=`,
-- `dut_audio src=unicast|bcast_bis1|bcast_bis2 freq=<Hz> level=<dBFS, 0.1 dB> active=<%> lost=`,
+- `dut_audio src=unicast|bcast_bis1|bcast_bis2 freq=<Hz> level=<dBFS, 0.1 dB> active=<%> lost=
+  clip=` (`clip`: decoded samples at full scale),
 - `dut_call idx= state=`,
 - `dut_media state=`,
 - `dut_volume volume= mute=`,
@@ -449,7 +466,7 @@ EVT ... source_stream_open id=1 ctx=conversational preset=16_2 bidir=1 tone=300
 | `test_bonding.py` | Bond; filling the list, evicting the oldest (`key_missing`) and reconnecting the newest without pairing; "the phone forgot" (re-pairing refused until `unpair` on the hearing aid); parallel connections; fast connect–pair–disconnect cycles. |
 | `test_phone.py` | Music (48 kHz, 440 Hz at the hearing aid); a ringtone interrupting music, answering on the hearing aid, a bidirectional call and music resuming; rejecting on the hearing aid; an outgoing call and hold; pause/play from the hearing aid; an alert during music; volume and mute; state machine (transitions, refusing a disallowed request, deferred music). |
 | `test_broadcast.py` | Stereo L/R and a live tone change; encryption (no code, wrong code, right code); 48 kHz HQ; name filter; builder: 2 subgroups with languages and 3 BISes with their own parameters (the hearing aid checks the tone, sampling rate, octets and language of every BIS), selecting one BIS; 2 broadcasts at once (plain and encrypted); airtime limit and the `rtn=1` workaround; the budget covers all BIGs; builder validation. |
-| `test_lc3_table.py` | Each of the 16 BAP configurations (low and high tone and a live change, lossless); nearest tone selection, `exact=1`, ranges; level through `g_idx` (−6…−40 dBFS measured at the hearing aid ±1 dB); a 7.5 ms BIG next to a 10 ms one (refusal, `--force`, warning). |
+| `test_lc3_table.py` | Each of the 16 BAP configurations (low and high tone and a live change, lossless); nearest tone selection, `exact=1`, ranges; level through `g_idx` (−2…−40 dBFS measured at the hearing aid ±1 dB); the highest level not clipped (8_1, 16_2, 48_2), 0 dBFS refused; a 7.5 ms BIG next to a 10 ms one (refusal, `--force`, warning). |
 | `test_capacity.py` | 11 BISes at once (8 plain + 3 encrypted) lossless and refusing one more BIG; 3 plain/encrypted BIGs with different codes and rejecting another BIG's code (MIC); encryption cost in the budget; budget limit (8 + 4 and 3 + 3 + 3 rejected); (slow) every configuration at the budget limit lossless at a receiver holding the PA. |
 | `test_proto.py` | Firmware keys = specification, unknown keys refused, JSON Lines (values with quotes and non-ASCII characters), `human` mode, `limits`/`id`/`time`, event filter, help, hints, a single shell error. |
 | `test_clients.py` | Python library over pty and TCP (device, pairing, errors, events, a broadcast heard by the hearing aid); Java library: `./gradlew test` with a test against the simulation over TCP (skipped without a JDK). |

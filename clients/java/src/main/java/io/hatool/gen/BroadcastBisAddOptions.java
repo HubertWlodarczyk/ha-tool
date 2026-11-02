@@ -68,7 +68,7 @@ public final class BroadcastBisAddOptions {
         return this;
     }
 
-    /** level; -40..0; dBFS */
+    /** level; -40..-2; dBFS */
     public BroadcastBisAddOptions level(int v) {
         keys.put("level", v);
         return this;

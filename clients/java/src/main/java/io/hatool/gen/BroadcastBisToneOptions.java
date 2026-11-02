@@ -28,7 +28,7 @@ public final class BroadcastBisToneOptions {
         return this;
     }
 
-    /** level; -40..0; dBFS */
+    /** level; -40..-2; dBFS */
     public BroadcastBisToneOptions level(int v) {
         keys.put("level", v);
         return this;
