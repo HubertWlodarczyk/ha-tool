@@ -1,0 +1,14 @@
+# UBSan suppressions for the --sanitize simulation build (HA_VARIANT=asan).
+# Only code outside this project (simulator models), each with the reason.
+
+# BabbleSim nRF HW model of the AES-CCM peripheral reads uint64_t from byte buffers. Simulator
+# code (not on the DK), harmless on x86.
+alignment:NHW_AES_CCM.c
+
+# Same for the RADIO model (uint32_t loads from packet byte buffers).
+alignment:NHW_RADIO.c
+
+# liblc3 builds float bit patterns with (int)x << 23 (fast log2/exp2 approximations). A
+# signed left shift past INT_MAX is undefined in C but compiles to the intended bit pattern
+# with GCC/Clang on every target; third-party code, used by the decoder of dut_sim.
+shift-base:fastmath.h

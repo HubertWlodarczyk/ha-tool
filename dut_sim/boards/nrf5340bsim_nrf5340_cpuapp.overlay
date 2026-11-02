@@ -1,0 +1,6 @@
+/ {
+	chosen {
+		/* CLI on UART0, exposed as a pseudoterminal with -uart0_pty */
+		zephyr,shell-uart = &uart0;
+	};
+};

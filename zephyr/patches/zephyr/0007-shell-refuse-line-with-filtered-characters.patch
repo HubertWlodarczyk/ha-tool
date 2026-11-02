@@ -1,0 +1,54 @@
+diff --git a/include/zephyr/shell/shell.h b/include/zephyr/shell/shell.h
+index ac8262e7370..4c29f69f36f 100644
+--- a/include/zephyr/shell/shell.h
++++ b/include/zephyr/shell/shell.h
+@@ -1086,6 +1086,9 @@ struct shell_ctx {
+ #endif
+ 
+ 	uint16_t cmd_buff_len; /*!< Command length.*/
++
++	/** Characters of the current line dropped by the ASCII filter. */
++	uint16_t filtered_cnt;
+ 	uint16_t cmd_buff_pos; /*!< Command buffer cursor position.*/
+ 
+ 	uint16_t cmd_tmp_buff_len; /*!< Command length in tmp buffer.*/
+diff --git a/subsys/shell/shell.c b/subsys/shell/shell.c
+index f55429f5fcb..68c9d6cf191 100644
+--- a/subsys/shell/shell.c
++++ b/subsys/shell/shell.c
+@@ -75,6 +75,7 @@ static void cmd_buffer_clear(const struct shell *sh)
+ 	sh->ctx->cmd_buff[0] = '\0'; /* clear command buffer */
+ 	sh->ctx->cmd_buff_pos = 0;
+ 	sh->ctx->cmd_buff_len = 0;
++	sh->ctx->filtered_cnt = 0;
+ }
+ 
+ static void shell_internal_help_print(const struct shell *sh)
+@@ -1513,6 +1514,10 @@ static void state_collect(const struct shell *sh)
+ 		}
+ 
+ 		if (ascii_filter(data) != 0) {
++			/* Remembered: the line must not run with characters silently missing */
++			if (sh->ctx->filtered_cnt < UINT16_MAX) {
++				sh->ctx->filtered_cnt++;
++			}
+ 			continue;
+ 		}
+ 
+@@ -1526,7 +1531,15 @@ static void state_collect(const struct shell *sh)
+ 					return;
+ 				}
+ 
+-				if (!sh->ctx->cmd_buff_len) {
++				if (sh->ctx->filtered_cnt != 0U) {
++					z_cursor_next_line_move(sh);
++					z_shell_fprintf(sh, SHELL_ERROR,
++							"line ignored: %u non-ASCII character(s)\n",
++							sh->ctx->filtered_cnt);
++					cmd_buffer_clear(sh);
++					history_mode_exit(sh);
++					sh->ctx->ret_val = -EILSEQ;
++				} else if (!sh->ctx->cmd_buff_len) {
+ 					history_mode_exit(sh);
+ 					z_cursor_next_line_move(sh);
+ 				} else {

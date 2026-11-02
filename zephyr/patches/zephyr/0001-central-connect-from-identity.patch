@@ -1,0 +1,169 @@
+diff --git a/include/zephyr/bluetooth/conn.h b/include/zephyr/bluetooth/conn.h
+index 42bb6646695..af37d223342 100644
+--- a/include/zephyr/bluetooth/conn.h
++++ b/include/zephyr/bluetooth/conn.h
+@@ -1928,6 +1928,20 @@ int bt_conn_le_create(const bt_addr_le_t *peer,
+ 		      const struct bt_le_conn_param *conn_param,
+ 		      struct bt_conn **conn);
+ 
++/** @brief Select the local identity used when initiating LE connections.
++ *
++ *  Subsequent calls to bt_conn_le_create() initiate the connection from the
++ *  identity address of @p id, and the resulting connection (and any bond
++ *  created on it) belongs to that identity.
++ *
++ *  @param id Local identity, as returned by bt_id_create(). BT_ID_DEFAULT
++ *            restores the default behavior.
++ *
++ *  @return Zero on success, -EINVAL for an unknown identity or -EBUSY while
++ *          a connection is being initiated.
++ */
++int bt_conn_le_create_set_id(uint8_t id);
++
+ struct bt_conn_le_create_synced_param {
+ 
+ 	/** @brief Remote address
+diff --git a/subsys/bluetooth/host/conn.c b/subsys/bluetooth/host/conn.c
+index 9e476b5d5c9..d4380c23246 100644
+--- a/subsys/bluetooth/host/conn.c
++++ b/subsys/bluetooth/host/conn.c
+@@ -4217,6 +4217,28 @@ int bt_conn_create_auto_stop(void)
+ }
+ #endif /* defined(CONFIG_BT_FILTER_ACCEPT_LIST) */
+ 
++static uint8_t le_create_id = BT_ID_DEFAULT;
++
++int bt_conn_le_create_set_id(uint8_t id)
++{
++	if (id >= bt_dev.id_count) {
++		return -EINVAL;
++	}
++
++	if (atomic_test_bit(bt_dev.flags, BT_DEV_INITIATING)) {
++		return -EBUSY;
++	}
++
++	le_create_id = id;
++
++	return 0;
++}
++
++uint8_t bt_conn_le_create_id_get(void)
++{
++	return le_create_id;
++}
++
+ static int conn_le_create_common_checks(const bt_addr_le_t *peer,
+ 					const struct bt_le_conn_param *conn_param)
+ {
+@@ -4246,7 +4268,7 @@ static int conn_le_create_common_checks(const bt_addr_le_t *peer,
+ 		return -EINVAL;
+ 	}
+ 
+-	if (bt_conn_exists_le(BT_ID_DEFAULT, peer)) {
++	if (bt_conn_exists_le(le_create_id, peer)) {
+ 		LOG_DBG("Conn check failed: ACL connection already exists.");
+ 		return -EINVAL;
+ 	}
+@@ -4263,11 +4285,10 @@ static struct bt_conn *conn_le_create_helper(const bt_addr_le_t *peer,
+ 	if (bt_addr_le_is_resolved(peer)) {
+ 		bt_addr_le_copy_resolved(&dst, peer);
+ 	} else {
+-		bt_addr_le_copy(&dst, bt_lookup_id_addr(BT_ID_DEFAULT, peer));
++		bt_addr_le_copy(&dst, bt_lookup_id_addr(le_create_id, peer));
+ 	}
+ 
+-	/* Only default identity supported for now */
+-	conn = bt_conn_add_le(BT_ID_DEFAULT, &dst);
++	conn = bt_conn_add_le(le_create_id, &dst);
+ 	if (!conn) {
+ 		return NULL;
+ 	}
+diff --git a/subsys/bluetooth/host/conn_internal.h b/subsys/bluetooth/host/conn_internal.h
+index 46c6fc95b54..6d04a1a09cd 100644
+--- a/subsys/bluetooth/host/conn_internal.h
++++ b/subsys/bluetooth/host/conn_internal.h
+@@ -428,6 +428,16 @@ bool bt_conn_exists_le(uint8_t id, const bt_addr_le_t *peer);
+ /* Add a new LE connection */
+ struct bt_conn *bt_conn_add_le(uint8_t id, const bt_addr_le_t *peer);
+ 
++/* Local identity used when initiating LE connections */
++#if defined(CONFIG_BT_CENTRAL)
++uint8_t bt_conn_le_create_id_get(void);
++#else
++static inline uint8_t bt_conn_le_create_id_get(void)
++{
++	return BT_ID_DEFAULT;
++}
++#endif
++
+ int bt_conn_iso_init(void);
+ 
+ /* Cleanup ISO references */
+diff --git a/subsys/bluetooth/host/hci_core.c b/subsys/bluetooth/host/hci_core.c
+index 34417cbbe0e..db9884545ef 100644
+--- a/subsys/bluetooth/host/hci_core.c
++++ b/subsys/bluetooth/host/hci_core.c
+@@ -1409,10 +1409,10 @@ static struct bt_conn *find_pending_connect(uint8_t role, const bt_addr_le_t *pe
+ 	 * CONNECT or CONNECT_AUTO state associated with passed peer LE address.
+ 	 */
+ 	if (IS_ENABLED(CONFIG_BT_CENTRAL) && role == BT_HCI_ROLE_CENTRAL) {
+-		conn = bt_conn_lookup_state_le(BT_ID_DEFAULT, peer_addr,
++		conn = bt_conn_lookup_state_le(bt_conn_le_create_id_get(), peer_addr,
+ 					       BT_CONN_INITIATING);
+ 		if (IS_ENABLED(CONFIG_BT_FILTER_ACCEPT_LIST) && !conn) {
+-			conn = bt_conn_lookup_state_le(BT_ID_DEFAULT,
++			conn = bt_conn_lookup_state_le(bt_conn_le_create_id_get(),
+ 						       BT_ADDR_LE_NONE,
+ 						       BT_CONN_INITIATING_FILTER_LIST);
+ 		}
+@@ -1636,7 +1636,7 @@ void bt_hci_le_enh_conn_complete(struct bt_hci_evt_le_enh_conn_complete *evt,
+ 	bt_id_pending_keys_update();
+ #endif
+ 
+-	id = BT_ID_DEFAULT;
++	id = bt_conn_le_create_id_get();
+ 	if (evt->role == BT_HCI_ROLE_PERIPHERAL) {
+ 		id = ext_adv != NULL ? ext_adv->id : bt_dev.adv_conn_id;
+ 	}
+diff --git a/subsys/bluetooth/host/id.c b/subsys/bluetooth/host/id.c
+index ff17f698978..2574797f528 100644
+--- a/subsys/bluetooth/host/id.c
++++ b/subsys/bluetooth/host/id.c
+@@ -1963,8 +1963,26 @@ int bt_id_set_create_conn_own_addr(bool use_filter, uint8_t *own_addr_type)
+ 			return -EINVAL;
+ 		}
+ 
++		if (bt_conn_le_create_id_get() != BT_ID_DEFAULT) {
++			/* Initiating from another identity: the current RPA may belong to a
++			 * different identity (the RPA valid flag is global), so generate a fresh
++			 * one from this identity's IRK. The controller must use it as is: with
++			 * controller privacy it would pick the local IRK of the resolving list
++			 * entry, which is shared by all identities bonded with the same peer.
++			 */
++			le_rpa_invalidate();
++			err = bt_id_set_private_addr(bt_conn_le_create_id_get());
++			if (err) {
++				return err;
++			}
++
++			*own_addr_type = BT_HCI_OWN_ADDR_RANDOM;
++
++			return 0;
++		}
++
+ 		if (use_filter || rpa_timeout_valid_check()) {
+-			err = bt_id_set_private_addr(BT_ID_DEFAULT);
++			err = bt_id_set_private_addr(bt_conn_le_create_id_get());
+ 			if (err) {
+ 				return err;
+ 			}
+@@ -1981,7 +1999,7 @@ int bt_id_set_create_conn_own_addr(bool use_filter, uint8_t *own_addr_type)
+ 			*own_addr_type = BT_HCI_OWN_ADDR_RANDOM;
+ 		}
+ 	} else {
+-		const bt_addr_le_t *addr = &bt_dev.id_addr[BT_ID_DEFAULT];
++		const bt_addr_le_t *addr = &bt_dev.id_addr[bt_conn_le_create_id_get()];
+ 
+ 		/* If Static Random address is used as Identity address we
+ 		 * need to restore it before creating connection. Otherwise

@@ -1,0 +1,440 @@
+diff --git a/subsys/bluetooth/controller/ll_sw/ull_adv_aux.c b/subsys/bluetooth/controller/ll_sw/ull_adv_aux.c
+index 0b37613..c86746c 100644
+--- a/subsys/bluetooth/controller/ll_sw/ull_adv_aux.c
++++ b/subsys/bluetooth/controller/ll_sw/ull_adv_aux.c
+@@ -2601,6 +2601,10 @@ uint32_t ull_adv_aux_start(struct ll_adv_aux_set *aux, uint32_t ticks_anchor,
+ 	aux_handle = ull_adv_aux_handle_get(aux);
+ 	interval_us = aux->interval * PERIODIC_INT_UNIT_US;
+ 
++#if defined(CONFIG_BT_CTLR_ADV_ISO) && defined(CONFIG_BT_TICKER_NEXT_SLOT_GET_MATCH)
++	ticks_anchor = ull_adv_aux_anchor_free_get(aux, ticks_anchor);
++#endif /* CONFIG_BT_CTLR_ADV_ISO && CONFIG_BT_TICKER_NEXT_SLOT_GET_MATCH */
++
+ #if defined(CONFIG_BT_CTLR_ADV_AUX_SLOT_WINDOW_DRIFT)
+ 	ll_adv_aux_ticker_ext[aux_handle].ticks_slot_window =
+ 		ULL_ADV_RANDOM_DELAY + aux->ull.ticks_slot;
+diff --git a/subsys/bluetooth/controller/ll_sw/ull_adv_internal.h b/subsys/bluetooth/controller/ll_sw/ull_adv_internal.h
+index 2442b8a..f8dfa7f 100644
+--- a/subsys/bluetooth/controller/ll_sw/ull_adv_internal.h
++++ b/subsys/bluetooth/controller/ll_sw/ull_adv_internal.h
+@@ -339,6 +339,14 @@ void ull_adv_iso_done_terminate(struct node_rx_event_done *done);
+ /* helper function to return adv_iso instance */
+ struct ll_adv_iso_set *ull_adv_iso_by_stream_get(uint16_t handle);
+ 
++#if defined(CONFIG_BT_TICKER_NEXT_SLOT_GET_MATCH)
++/* Anchor of a new periodic advertising train delayed off the events of running BIGs and trains */
++uint32_t ull_adv_sync_anchor_free_get(const struct ll_adv_sync_set *sync, uint32_t ticks_anchor);
++
++/* Anchor of a new auxiliary advertising set delayed off the events of running BIGs and trains */
++uint32_t ull_adv_aux_anchor_free_get(const struct ll_adv_aux_set *aux, uint32_t ticks_anchor);
++#endif /* CONFIG_BT_TICKER_NEXT_SLOT_GET_MATCH */
++
+ /* helper function to return adv_iso stream instance */
+ struct lll_adv_iso_stream *ull_adv_iso_stream_get(uint16_t handle);
+ 
+diff --git a/subsys/bluetooth/controller/ll_sw/ull_adv_iso.c b/subsys/bluetooth/controller/ll_sw/ull_adv_iso.c
+index 928ed1e..6d49945 100644
+--- a/subsys/bluetooth/controller/ll_sw/ull_adv_iso.c
++++ b/subsys/bluetooth/controller/ll_sw/ull_adv_iso.c
+@@ -1281,6 +1281,374 @@ static uint32_t adv_iso_time_get(const struct ll_adv_iso_set *adv_iso, bool max)
+ 	return time_us;
+ }
+ 
++#if defined(CONFIG_BT_TICKER_NEXT_SLOT_GET_MATCH)
++static bool ticker_match_adv_iso_cb(uint8_t ticker_id, uint32_t ticks_slot,
++				    uint32_t ticks_to_expire, void *op_context)
++{
++	ARG_UNUSED(ticks_slot);
++	ARG_UNUSED(ticks_to_expire);
++	ARG_UNUSED(op_context);
++
++	return IN_RANGE(ticker_id, TICKER_ID_ADV_ISO_BASE, TICKER_ID_ADV_ISO_LAST) ||
++	       IN_RANGE(ticker_id, TICKER_ID_ADV_SYNC_BASE, TICKER_ID_ADV_SYNC_LAST) ||
++	       IN_RANGE(ticker_id, TICKER_ID_ADV_AUX_BASE, TICKER_ID_ADV_AUX_LAST);
++}
++
++static void ticker_op_status_cb(uint32_t status, void *param)
++{
++	*((uint32_t volatile *)param) = status;
++}
++
++/* a - b in microseconds, either order (the ticker counter wraps) */
++static int64_t ticks_signed_diff_us(uint32_t ticks_a, uint32_t ticks_b)
++{
++	const uint32_t d = ticker_ticks_diff_get(ticks_a, ticks_b);
++
++	if (d > (HAL_TICKER_CNTR_MASK >> 1)) {
++		return -(int64_t)HAL_TICKER_TICKS_TO_US(ticker_ticks_diff_get(ticks_b, ticks_a));
++	}
++
++	return HAL_TICKER_TICKS_TO_US(d);
++}
++
++/*
++ * Time a periodic advertising train is taken to occupy: what a receiver synchronized to it
++ * reserves (a PDU of the maximum length, ull_sync.c), not only what this advertiser sends.
++ * A BIG closer to the train than that is sent, but a receiver synchronized to both the train
++ * and the BIG (BAP broadcast sinks often stay synchronized) loses one of the two events.
++ */
++static uint32_t sync_occupancy_us(const struct ll_adv_sync_set *sync)
++{
++	const struct lll_adv *lll = sync->lll.adv;
++	uint32_t rx_us;
++
++	rx_us = PDU_AC_MAX_US(PDU_AC_EXT_PAYLOAD_SIZE_MAX, lll->phy_s) +
++		lll_radio_rx_ready_delay_get(lll->phy_s, lll->phy_flags) +
++		EVENT_OVERHEAD_START_US + EVENT_OVERHEAD_END_US;
++
++	return MAX(HAL_TICKER_TICKS_TO_US(sync->ull.ticks_slot), rx_us);
++}
++
++/* Running BIGs, periodic advertising trains and auxiliary advertising sets */
++#define PERIODIC_ROLES_MAX (CONFIG_BT_CTLR_ADV_ISO_SET + CONFIG_BT_CTLR_ADV_SYNC_SET + \
++			    CONFIG_BT_CTLR_ADV_AUX_SET)
++
++/* A running periodic role: next expiry (absolute ticks), reserved time and interval */
++struct periodic_occupancy {
++	uint32_t ticks_expire;
++	uint32_t slot_us;
++	uint32_t interval_us;
++	bool is_big;
++};
++
++/* Running BIGs (other than self), periodic advertising trains and auxiliary sets */
++static uint8_t running_periodic_get(const struct ll_adv_iso_set *self,
++				    struct periodic_occupancy *occ, uint8_t max)
++{
++	uint32_t ticks_ref = 0U;
++	uint32_t ticks_ref_prev = 0U;
++	uint8_t retry = UINT8_MAX;
++	uint8_t ticker_id = TICKER_NULL;
++	uint8_t count = 0U;
++
++	while (count < max) {
++		uint32_t volatile ret_cb = TICKER_STATUS_BUSY;
++		uint32_t ticks_to_expire;
++		uint32_t remainder;
++		uint32_t ret;
++
++		ret = ticker_next_slot_get_ext(TICKER_INSTANCE_ID_CTLR, TICKER_USER_ID_THREAD,
++					       &ticker_id, &ticks_ref, &ticks_to_expire,
++					       &remainder, NULL, ticker_match_adv_iso_cb, NULL,
++					       ticker_op_status_cb, (void *)&ret_cb);
++		if (ret == TICKER_STATUS_BUSY) {
++			while (ret_cb == TICKER_STATUS_BUSY) {
++				ticker_job_sched(TICKER_INSTANCE_ID_CTLR, TICKER_USER_ID_THREAD);
++			}
++		}
++
++		if (ret_cb != TICKER_STATUS_SUCCESS || ticker_id == TICKER_NULL) {
++			break;
++		}
++
++		/* Tickers expired while iterating: start over from the new reference */
++		if (count > 0U && ticks_ref != ticks_ref_prev) {
++			if (--retry == 0U) {
++				break;
++			}
++
++			ticker_id = TICKER_NULL;
++			count = 0U;
++			continue;
++		}
++
++		ticks_ref_prev = ticks_ref;
++		if (IN_RANGE(ticker_id, TICKER_ID_ADV_ISO_BASE, TICKER_ID_ADV_ISO_LAST)) {
++			const struct ll_adv_iso_set *big;
++
++			big = adv_iso_get(ticker_id - TICKER_ID_ADV_ISO_BASE);
++			if (big == NULL || big == self) {
++				continue;
++			}
++
++			occ[count].slot_us = HAL_TICKER_TICKS_TO_US(big->ull.ticks_slot);
++			occ[count].interval_us = big->lll.iso_interval * ISO_INT_UNIT_US;
++			occ[count].is_big = true;
++		} else if (IN_RANGE(ticker_id, TICKER_ID_ADV_AUX_BASE, TICKER_ID_ADV_AUX_LAST)) {
++			const struct ll_adv_aux_set *aux;
++
++			aux = ull_adv_aux_get(ticker_id - TICKER_ID_ADV_AUX_BASE);
++			if (aux == NULL) {
++				continue;
++			}
++
++			occ[count].slot_us = HAL_TICKER_TICKS_TO_US(aux->ull.ticks_slot);
++			occ[count].interval_us = aux->interval * PERIODIC_INT_UNIT_US;
++			occ[count].is_big = false;
++		} else {
++			const struct ll_adv_sync_set *sync;
++
++			sync = ull_adv_sync_get(ticker_id - TICKER_ID_ADV_SYNC_BASE);
++			if (sync == NULL) {
++				continue;
++			}
++
++			occ[count].slot_us = sync_occupancy_us(sync);
++			occ[count].interval_us = sync->interval * PERIODIC_INT_UNIT_US;
++			occ[count].is_big = false;
++		}
++
++		occ[count].ticks_expire = ticks_ref + ticks_to_expire;
++		count++;
++	}
++
++	return count;
++}
++
++/* Common period of two intervals if one is a multiple of the other, else 0 (no lasting overlap) */
++static uint32_t common_period(uint32_t a_us, uint32_t b_us)
++{
++	const uint32_t lo = MIN(a_us, b_us);
++
++	return (lo != 0U && (MAX(a_us, b_us) % lo) == 0U) ? lo : 0U;
++}
++
++static uint32_t mod_us(int64_t x, uint32_t m)
++{
++	return (uint32_t)(((x % m) + m) % m);
++}
++
++/* A role starting delay_us after the anchor overlaps none of the (considered) roles */
++static bool phase_free(const struct periodic_occupancy *occ, const int64_t *rel_us, uint8_t count,
++		       bool bigs_only, uint32_t delay_us, uint32_t slot_us, uint32_t interval_us)
++{
++	const uint32_t margin_us = EVENT_TICKER_RES_MARGIN_US << 2;
++
++	for (uint8_t i = 0U; i < count; i++) {
++		const uint32_t period = common_period(interval_us, occ[i].interval_us);
++		uint32_t phase;
++
++		if (period == 0U || (bigs_only && !occ[i].is_big)) {
++			continue;
++		}
++
++		/* Start of the new role in the common period, from the start of the other one */
++		phase = mod_us(rel_us[i] + delay_us, period);
++		if (phase < occ[i].slot_us + margin_us || phase + slot_us + margin_us > period) {
++			return false;
++		}
++	}
++
++	return true;
++}
++
++/* Smallest interval of the running BIGs and the new role (if a BIG): the period in which their
++ * events and the phases of the periodic advertising trains have to share the air. 0 if none.
++ */
++static uint32_t big_period_get(const struct periodic_occupancy *occ, uint8_t count,
++			       bool new_is_big, uint32_t interval_us)
++{
++	uint32_t period = new_is_big ? interval_us : 0U;
++
++	for (uint8_t i = 0U; i < count; i++) {
++		if (occ[i].is_big && (period == 0U || occ[i].interval_us < period)) {
++			period = occ[i].interval_us;
++		}
++	}
++
++	return period;
++}
++
++/* Largest free gap left in the BIG period once the new role starts delay_us after the anchor:
++ * every role whose interval is a multiple of the period takes its phase in each period.
++ */
++static uint32_t largest_gap_get(const struct periodic_occupancy *occ, const int64_t *rel_us,
++				uint8_t count, uint32_t period, uint32_t delay_us,
++				uint32_t slot_us, uint32_t interval_us)
++{
++	const uint32_t margin_us = EVENT_TICKER_RES_MARGIN_US << 2;
++	uint32_t start[PERIODIC_ROLES_MAX + 1U];
++	uint32_t len[ARRAY_SIZE(start)];
++	uint32_t gap = 0U;
++	uint8_t n = 0U;
++
++	for (int16_t i = -1; i < (int16_t)count && n < ARRAY_SIZE(start); i++) {
++		const uint32_t ival = (i < 0) ? interval_us : occ[i].interval_us;
++
++		if ((ival % period) != 0U) {
++			continue;
++		}
++
++		start[n] = (i < 0) ? mod_us(delay_us, period) : mod_us(-rel_us[i], period);
++		len[n] = ((i < 0) ? slot_us : occ[i].slot_us) + margin_us;
++		n++;
++	}
++
++	/* Sorted by start (few entries) */
++	for (uint8_t i = 1U; i < n; i++) {
++		for (uint8_t j = i; j > 0U && start[j] < start[j - 1U]; j--) {
++			uint32_t t = start[j];
++
++			start[j] = start[j - 1U];
++			start[j - 1U] = t;
++			t = len[j];
++			len[j] = len[j - 1U];
++			len[j - 1U] = t;
++		}
++	}
++
++	for (uint8_t i = 0U; i < n; i++) {
++		const uint32_t end = start[i] + len[i];
++		const uint32_t next = (i + 1U < n) ? start[i + 1U] : start[0] + period;
++
++		if (next > end && next - end > gap) {
++			gap = next - end;
++		}
++	}
++
++	return (n == 0U) ? period : gap;
++}
++
++/* Delay from the anchor to a free phase. Candidates: the anchor itself, the end of a role's
++ * event and, for a periodic advertising train, the phase of another train of the same interval
++ * shifted by whole BIG periods (both then share one gap in different BIG events). Of the free
++ * ones, the one leaving the largest gap in the BIG period for later roles (the nearest if
++ * equal), so that trains placed in the middle of the free time do not split it into pieces too
++ * small for another BIG. UINT32_MAX if there is none.
++ */
++static uint32_t free_delay_get(const struct periodic_occupancy *occ, const int64_t *rel_us,
++			       uint8_t count, bool bigs_only, bool new_is_big, uint32_t slot_us,
++			       uint32_t interval_us)
++{
++	const uint32_t margin_us = EVENT_TICKER_RES_MARGIN_US << 2;
++	const uint32_t big_period = big_period_get(occ, count, new_is_big, interval_us);
++	uint32_t best_gap = 0U;
++	uint32_t best = UINT32_MAX;
++
++	for (int16_t c = -1; c < (int16_t)count; c++) {
++		const uint32_t period = (c >= 0) ? common_period(interval_us, occ[c].interval_us)
++						 : interval_us;
++		uint32_t shifts = 1U;
++
++		if (c >= 0 && (period == 0U || (bigs_only && !occ[c].is_big))) {
++			continue;
++		}
++
++		if (c >= 0 && !new_is_big && !occ[c].is_big && big_period != 0U &&
++		    occ[c].interval_us == interval_us && (interval_us % big_period) == 0U) {
++			shifts += interval_us / big_period - 1U;
++		}
++
++		for (uint32_t k = 0U; k <= shifts; k++) {
++			uint32_t delay_us;
++			uint32_t gap;
++
++			if (c < 0) {
++				if (k > 0U) {
++					break;
++				}
++
++				delay_us = 0U;
++			} else if (k == 0U) {
++				delay_us = mod_us((int64_t)occ[c].slot_us + margin_us - rel_us[c],
++						  period);
++			} else if (k < shifts) {
++				delay_us = mod_us((int64_t)k * big_period - rel_us[c], period);
++			} else {
++				break;
++			}
++
++			if (!phase_free(occ, rel_us, count, bigs_only, delay_us, slot_us,
++					interval_us)) {
++				continue;
++			}
++
++			gap = (big_period != 0U)
++				      ? largest_gap_get(occ, rel_us, count, big_period, delay_us,
++							slot_us, interval_us)
++				      : 0U;
++			if (best == UINT32_MAX || gap > best_gap ||
++			    (gap == best_gap && delay_us < best)) {
++				best = delay_us;
++				best_gap = gap;
++			}
++		}
++	}
++
++	return best;
++}
++
++/*
++ * ull_sched_adv_aux_sync_free_anchor_get() sees only the next event of each role. A new BIG,
++ * periodic advertising train or auxiliary advertising set could thus land on a later event of a
++ * running role of a multiple interval and lose to it, or take from it, one event per period for
++ * good: a BIG of the same interval (every other event), a 60 ms train or a 70 ms auxiliary set
++ * over a 10 ms BIG (one BIG event in six; an auxiliary set that never gets out, so receivers
++ * cannot find the broadcast).
++ * Returns the anchor delayed to a phase free of every running BIG (other than self), train and
++ * auxiliary set whose interval is a multiple of the new role's or the other way round (others
++ * cannot keep colliding with it); if there is none, free of the BIGs at least.
++ */
++static uint32_t anchor_free_get(const struct ll_adv_iso_set *self, bool new_is_big,
++				uint32_t ticks_anchor, uint32_t slot_us, uint32_t interval_us)
++{
++	struct periodic_occupancy occ[PERIODIC_ROLES_MAX];
++	int64_t rel_us[ARRAY_SIZE(occ)];
++	uint32_t delay_us;
++	uint8_t count;
++
++	count = running_periodic_get(self, occ, ARRAY_SIZE(occ));
++	for (uint8_t i = 0U; i < count; i++) {
++		rel_us[i] = ticks_signed_diff_us(ticks_anchor, occ[i].ticks_expire);
++	}
++
++	delay_us = free_delay_get(occ, rel_us, count, false, new_is_big, slot_us, interval_us);
++	if (delay_us == UINT32_MAX) {
++		delay_us = free_delay_get(occ, rel_us, count, true, new_is_big, slot_us,
++					  interval_us);
++	}
++
++	if (delay_us == UINT32_MAX) {
++		return ticks_anchor;
++	}
++
++	return ticks_anchor + HAL_TICKER_US_TO_TICKS_CEIL(delay_us);
++}
++
++uint32_t ull_adv_sync_anchor_free_get(const struct ll_adv_sync_set *sync, uint32_t ticks_anchor)
++{
++	return anchor_free_get(NULL, false, ticks_anchor, sync_occupancy_us(sync),
++			       sync->interval * PERIODIC_INT_UNIT_US);
++}
++
++uint32_t ull_adv_aux_anchor_free_get(const struct ll_adv_aux_set *aux, uint32_t ticks_anchor)
++{
++	return anchor_free_get(NULL, false, ticks_anchor,
++			       HAL_TICKER_TICKS_TO_US(aux->ull.ticks_slot),
++			       aux->interval * PERIODIC_INT_UNIT_US);
++}
++#endif /* CONFIG_BT_TICKER_NEXT_SLOT_GET_MATCH */
++
+ static uint32_t adv_iso_start(struct ll_adv_iso_set *adv_iso,
+ 			      uint32_t iso_interval_us)
+ {
+@@ -1319,6 +1687,11 @@ static uint32_t adv_iso_start(struct ll_adv_iso_set *adv_iso,
+ 					(EVENT_TICKER_RES_MARGIN_US << 1));
+ 	}
+ 
++#if defined(CONFIG_BT_TICKER_NEXT_SLOT_GET_MATCH)
++	ticks_anchor = anchor_free_get(adv_iso, true, ticks_anchor,
++				       HAL_TICKER_TICKS_TO_US(ticks_slot), iso_interval_us);
++#endif /* CONFIG_BT_TICKER_NEXT_SLOT_GET_MATCH */
++
+ 	/* use the ISO create prepare function for the first radio event of this BIG */
+ 	adv_iso->is_created = false;
+ 
+diff --git a/subsys/bluetooth/controller/ll_sw/ull_adv_sync.c b/subsys/bluetooth/controller/ll_sw/ull_adv_sync.c
+index ea1311c..9a05dfc 100644
+--- a/subsys/bluetooth/controller/ll_sw/ull_adv_sync.c
++++ b/subsys/bluetooth/controller/ll_sw/ull_adv_sync.c
+@@ -548,6 +548,10 @@ uint8_t ll_adv_sync_enable(uint8_t handle, uint8_t enable)
+ 			}
+ #endif /* CONFIG_BT_CTLR_SCHED_ADVANCED */
+ 
++#if defined(CONFIG_BT_CTLR_ADV_ISO) && defined(CONFIG_BT_TICKER_NEXT_SLOT_GET_MATCH)
++			ticks_anchor_sync = ull_adv_sync_anchor_free_get(sync, ticks_anchor_sync);
++#endif /* CONFIG_BT_CTLR_ADV_ISO && CONFIG_BT_TICKER_NEXT_SLOT_GET_MATCH */
++
+ 		} else {
+ 			/* Auxiliary set will be started due to inclusion of
+ 			 * sync info field.

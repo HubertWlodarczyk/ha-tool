@@ -1,0 +1,91 @@
+# Patches applied to the west workspace with 'west patch apply' (see README).
+patches:
+  - path: zephyr/0001-central-connect-from-identity.patch
+    sha256sum: 0e64bf2c11f80fb11b50757710d80aee44630d59e312add5e8344de30bea4102
+    module: zephyr
+    author: Hubert Włodarczyk
+    email: hubert.wlodarczyk.pl@gmail.com
+    date: 2026-10-31
+    upstreamable: true
+  # IS_ADV_ISO_HANDLE / IS_SYNC_ISO_HANDLE bounded the handle range by the BISes of ONE BIG
+  # (*_STREAM_MAX) instead of the pool of all BIGs (*_STREAM_COUNT): the 5th BIS of two BIGs
+  # (STREAM_MAX=4) hit LL_ASSERT in ull_iso_lll_event_prepare().
+  - path: zephyr/0002-controller-bis-handle-range.patch
+    sha256sum: 892e3ad585ec45e4d3b4b6389c91ecd230327b314c84be6006815f9cf4546204
+    module: zephyr
+    author: Hubert Włodarczyk
+    email: hubert.wlodarczyk.pl@gmail.com
+    date: 2026-10-31
+    upstreamable: true
+  # Pre-transmission subevents (Zephyr controller's own choice) roughly doubled every BIG event,
+  # so with 4 BIGs the 3rd one could not be scheduled at all: make it a Kconfig option.
+  - path: zephyr/0003-controller-adv-iso-pto-kconfig.patch
+    sha256sum: 2ebff66a3d53567cf64c40f0979314fd4ff8c2446163a8b645735107fc14c999
+    module: zephyr
+    author: Hubert Włodarczyk
+    email: hubert.wlodarczyk.pl@gmail.com
+    date: 2026-10-31
+    upstreamable: true
+  # The LLL prepare mayfly of BIGs is shared, but its function (create vs. normal prepare) was
+  # switched globally: when a BIG was created while others ran, an event of a running BIG
+  # consumed the create prepare and the new BIG never completed (3rd BIG never started).
+  - path: zephyr/0004-controller-big-create-prepare-per-big.patch
+    sha256sum: 37e1a1609e78350a0b2528950d9ebfb8b0599810499e92844e3dab021c3cf3fb
+    module: zephyr
+    author: Hubert Włodarczyk
+    email: hubert.wlodarczyk.pl@gmail.com
+    date: 2026-10-31
+    upstreamable: true
+  # bt_pbp_get_announcement() requires meta == NULL without metadata, then passed it to
+  # memcpy() with length 0: undefined behaviour (UBSan, --sanitize build).
+  - path: zephyr/0005-pbp-announcement-no-null-memcpy.patch
+    sha256sum: b7d9eee6982f22c32895f98d232adb950e441955e95d906f7571de89410e7d91
+    module: zephyr
+    author: Hubert Włodarczyk
+    email: hubert.wlodarczyk.pl@gmail.com
+    date: 2026-11-01
+    upstreamable: true
+  # A new BIG, periodic advertising train or auxiliary advertising set was placed after the next
+  # event of each running role only: it could land on a later event of a running role of a
+  # multiple interval for good (BIG on BIG: 50 % loss; 60 ms PA train on a 10 ms BIG: 17 %;
+  # 70 ms auxiliary set on a BIG: never sent, the broadcast could not be found). Every periodic
+  # role now gets a phase of its own: trains counted as long as a synchronized receiver reserves
+  # them, trains and auxiliary sets of one interval sharing a phase, and of the free phases the
+  # one leaving the largest gap. Found by the --sanitize build (tests/test_broadcast.py,
+  # tests/test_capacity.py).
+  - path: zephyr/0006-controller-adv-anchor-free-of-periodic.patch
+    sha256sum: e33a17d55529e1de998b6d45c39c424f709d76f262d123272e6d182a6954d454
+    module: zephyr
+    author: Hubert Włodarczyk
+    email: hubert.wlodarczyk.pl@gmail.com
+    date: 2026-11-01
+    upstreamable: true
+  # The shell dropped non-ASCII input bytes silently and ran the rest of the line: a broadcast
+  # typed as name=Zażółć was created as "Za", a line of only such bytes got no reply at all.
+  # The line is now refused with a shell error (found by tests/test_fuzz.py).
+  - path: zephyr/0007-shell-refuse-line-with-filtered-characters.patch
+    sha256sum: 755013f1cce41eb32ef841d5eb05aef6e187e866ff9f144a3ef54b1234d702f3
+    module: zephyr
+    author: Hubert Włodarczyk
+    email: hubert.wlodarczyk.pl@gmail.com
+    date: 2026-11-01
+    upstreamable: true
+  # The shell always registered its own 'help' root command. A Kconfig option makes it optional,
+  # so ha_tool provides 'help' generated from the protocol specification (common/src/cli_tree.c).
+  - path: zephyr/0008-shell-builtin-help-optional.patch
+    sha256sum: 0bec2c1ba836e48f9d596d51c757aa750f790de921f0a07275f0d4a9b153e1ac
+    module: zephyr
+    author: Hubert Włodarczyk
+    email: hubert.wlodarczyk.pl@gmail.com
+    date: 2026-11-01
+    upstreamable: true
+  # A line with an unknown first word and more words than CONFIG_SHELL_ARGC_MAX got two errors
+  # ("command not found", then "too many arguments"): one line, one reply (found by
+  # tests/test_fuzz.py, which checks exactly that).
+  - path: zephyr/0009-shell-one-error-for-unknown-command.patch
+    sha256sum: 01e5edfbcbdc11ff9f55de6152c98ff363eae388fcf729d406a0757c3f497129
+    module: zephyr
+    author: Hubert Włodarczyk
+    email: hubert.wlodarczyk.pl@gmail.com
+    date: 2026-11-02
+    upstreamable: true

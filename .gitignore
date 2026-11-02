@@ -1,0 +1,8 @@
+build/
+tests/out/
+__pycache__/
+.pytest_cache/
+.claude/
+*.egg-info/
+clients/java/.gradle/
+clients/java/build/

@@ -1,0 +1,32 @@
+# clang-tidy for the project's own sources (scripts/analyze.sh). Every disabled check has a
+# reason; everything else must stay clean.
+Checks: >
+  -*,
+  bugprone-*,
+  cert-*,
+  clang-analyzer-*,
+  -bugprone-easily-swappable-parameters,
+  -bugprone-assignment-in-if-condition,
+  -bugprone-branch-clone,
+  -bugprone-signed-bitwise,
+  -bugprone-narrowing-conversions,
+  -bugprone-too-small-loop-variable,
+  -cert-err33-c,
+  -clang-analyzer-optin.performance.Padding,
+  -clang-analyzer-optin.core.EnumCastOutOfRange,
+  -clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling
+# Why the checks above are off:
+#   easily-swappable-parameters  (x, y) style APIs everywhere; noise
+#   assignment-in-if-condition   Zephyr idiom, not used here but in macros
+#   branch-clone                 Zephyr macros (K_THREAD_DEFINE, SHELL_CMD_ARG) expand to
+#                                ?: with identical branches
+#   signed-bitwise               Zephyr macros (BIT(), BT_HCI_OP_*, LOG_*) on int constants
+#   narrowing-conversions        values are range checked before the cast (CLI parsing)
+#   too-small-loop-variable      uint8_t identity loops; BUILD_ASSERT keeps the arrays < 256
+#   cert-err33-c                 snprintf into buffers sized for the text; truncation of
+#                                output lines is handled explicitly (cli_vformat_line)
+#   optin.performance.Padding    a few bytes per struct, field order kept for readability
+#   optin.core.EnumCastOutOfRange  Zephyr uses enums as bit masks (bt_audio_context)
+#   insecureAPI.DeprecatedOr...  wants C11 Annex K (memcpy_s, ...), not in Zephyr's libc
+WarningsAsErrors: ''
+HeaderFilterRegex: '(ha_tool|dut_sim|common)/'

@@ -1,0 +1,2 @@
+# Makes this repository a Zephyr module, so 'west patch' finds zephyr/patches.yml
+name: ha-tool

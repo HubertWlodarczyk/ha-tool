@@ -1,0 +1,16 @@
+diff --git a/subsys/bluetooth/audio/pbp.c b/subsys/bluetooth/audio/pbp.c
+index b212534a869..2c0d53f57f4 100644
+--- a/subsys/bluetooth/audio/pbp.c
++++ b/subsys/bluetooth/audio/pbp.c
+@@ -48,7 +48,10 @@ int bt_pbp_get_announcement(const uint8_t meta[], size_t meta_len,
+ 	net_buf_simple_add_le16(pba_data_buf, BT_UUID_PBA_VAL);
+ 	net_buf_simple_add_u8(pba_data_buf, features);
+ 	net_buf_simple_add_u8(pba_data_buf, meta_len);
+-	net_buf_simple_add_mem(pba_data_buf, meta, meta_len);
++	if (meta_len > 0U) {
++		/* meta is NULL without metadata: memcpy() must not get a NULL pointer */
++		net_buf_simple_add_mem(pba_data_buf, meta, meta_len);
++	}
+ 
+ 	return 0;
+ }

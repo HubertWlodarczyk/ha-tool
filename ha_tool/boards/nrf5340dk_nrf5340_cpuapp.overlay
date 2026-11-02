@@ -1,0 +1,4 @@
+/* CLI on the J-Link VCOM at 1 Mbaud: an EVT line takes ~1 ms instead of ~9 ms at 115200 */
+&uart0 {
+	current-speed = <1000000>;
+};

@@ -1,0 +1,29 @@
+diff --git a/subsys/shell/Kconfig b/subsys/shell/Kconfig
+index 594643a..9b212f6 100644
+--- a/subsys/shell/Kconfig
++++ b/subsys/shell/Kconfig
+@@ -220,6 +220,13 @@ config SHELL_HELP
+ 	help
+ 	  Enables shell functions for printing formatted help message.
+ 
++config SHELL_HELP_CMD
++	bool "Built-in help command"
++	default y
++	help
++	  Registers the built-in 'help' root command. Disable it to let an
++	  application provide its own 'help' command.
++
+ config SHELL_HELP_OPT_PARSE
+ 	bool "Parse -h and --help options"
+ 	depends on SHELL_HELP
+diff --git a/subsys/shell/shell.c b/subsys/shell/shell.c
+index 68c9d6c..6a81a42 100644
+--- a/subsys/shell/shell.c
++++ b/subsys/shell/shell.c
+@@ -2432,4 +2432,5 @@ static int cmd_help(const struct shell *sh, size_t argc, char **argv)
+ 	return 0;
+ }
+ 
+-SHELL_CMD_ARG_REGISTER(help, NULL, "Prints the help message.", cmd_help, 1, 0);
++SHELL_COND_CMD_ARG_REGISTER(CONFIG_SHELL_HELP_CMD, help, NULL, "Prints the help message.",
++			    cmd_help, 1, 0);

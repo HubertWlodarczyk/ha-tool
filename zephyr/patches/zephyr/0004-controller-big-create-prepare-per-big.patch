@@ -1,0 +1,57 @@
+diff --git a/subsys/bluetooth/controller/ll_sw/ull_adv_types.h b/subsys/bluetooth/controller/ll_sw/ull_adv_types.h
+index afe817aefb1..bfc9b8c6ff5 100644
+--- a/subsys/bluetooth/controller/ll_sw/ull_adv_types.h
++++ b/subsys/bluetooth/controller/ll_sw/ull_adv_types.h
+@@ -121,6 +121,9 @@ struct ll_adv_iso_set {
+ 
+ 	struct node_rx_pdu node_rx_complete;
+ 
++	/* First BIG event done (BIG Complete generated): normal prepare from now on */
++	bool is_created;
++
+ 	struct {
+ 		struct node_rx_pdu rx;
+ 		/* Dummy declaration to ensure space allocated to hold one pdu bytes */
+diff --git a/subsys/bluetooth/controller/ll_sw/ull_adv_iso.c b/subsys/bluetooth/controller/ll_sw/ull_adv_iso.c
+--- a/subsys/bluetooth/controller/ll_sw/ull_adv_iso.c
++++ b/subsys/bluetooth/controller/ll_sw/ull_adv_iso.c
+@@ -1024,13 +1024,13 @@
+ 	struct node_rx_pdu *rx;
+ 	memq_link_t *link;
+ 
+-	/* switch to normal prepare */
+-	mfy_lll_prepare.fp = lll_adv_iso_prepare;
+-
+ 	/* Get reference to ULL context */
+ 	adv_iso = CONTAINER_OF(done->param, struct ll_adv_iso_set, ull);
+ 	lll = &adv_iso->lll;
+ 
++	/* switch this BIG to normal prepare (the prepare mayfly is shared by all BIGs) */
++	adv_iso->is_created = true;
++
+ 	/* Prepare BIG complete event */
+ 	rx = (void *)&adv_iso->node_rx_complete;
+ 	link = rx->hdr.link;
+@@ -1319,8 +1319,8 @@
+ 					(EVENT_TICKER_RES_MARGIN_US << 1));
+ 	}
+ 
+-	/* setup to use ISO create prepare function for first radio event */
+-	mfy_lll_prepare.fp = lll_adv_iso_create_prepare;
++	/* use the ISO create prepare function for the first radio event of this BIG */
++	adv_iso->is_created = false;
+ 
+ 	ret_cb = TICKER_STATUS_BUSY;
+ 	ret = ticker_start(TICKER_INSTANCE_ID_CTLR, TICKER_USER_ID_THREAD,
+@@ -1601,6 +1601,11 @@
+ 	p.force = force;
+ 	p.param = &adv_iso->lll;
+ 	mfy_lll_prepare.param = &p;
++	/* Per BIG: a global switch let the event of an already running BIG consume the create
++	 * prepare of a BIG being created, which then never completed.
++	 */
++	mfy_lll_prepare.fp = adv_iso->is_created ? lll_adv_iso_prepare :
++						   lll_adv_iso_create_prepare;
+ 
+ 	/* Kick LLL prepare */
+ 	ret = mayfly_enqueue(TICKER_USER_ID_ULL_HIGH, TICKER_USER_ID_LLL, 0,

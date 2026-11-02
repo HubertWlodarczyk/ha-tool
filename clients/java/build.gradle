@@ -1,0 +1,63 @@
+// Copyright (c) 2026 Hubert Włodarczyk
+// SPDX-License-Identifier: MPL-2.0
+
+// Java client of ha_tool. Java 17+, one runtime dependency (jSerialComm).
+// Generated sources: src/main/java/io/hatool/gen (tools/protogen/gen.py, do not edit).
+plugins {
+    id 'java-library'
+    id 'maven-publish'
+    id 'checkstyle'
+}
+
+group = 'io.hatool'
+version = '0.2.0'
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+    withSourcesJar()
+    withJavadocJar()
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    api 'com.fazecast:jSerialComm:2.11.0'
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.3'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.compilerArgs += ['-Xlint:all', '-Werror']
+}
+
+checkstyle {
+    toolVersion = '10.18.2'
+    maxWarnings = 0
+}
+
+javadoc {
+    options.encoding = 'UTF-8'
+    options.addBooleanOption('Xdoclint:none', true)
+}
+
+test {
+    useJUnitPlatform()
+    // Integration tests against a simulated board: HATOOL_TCP=host:port (scripts/sim.py --tcp)
+    environment 'HATOOL_TCP', System.getenv('HATOOL_TCP') ?: ''
+    testLogging {
+        events 'passed', 'skipped', 'failed'
+        exceptionFormat 'full'
+    }
+}
+
+publishing {
+    publications {
+        maven(MavenPublication) {
+            from components.java
+        }
+    }
+}

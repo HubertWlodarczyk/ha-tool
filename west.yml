@@ -1,0 +1,47 @@
+# West manifest of the HA-Tool workspace: Zephyr pinned to v4.5.0, only the modules the
+# nRF5340 (DK and BabbleSim) builds need.
+#
+#   mkdir ha-ws && cd ha-ws
+#   git clone https://github.com/HubertWlodarczyk/ha-tool.git
+#   west init -l ha-tool && west update && west patch apply
+manifest:
+  version: "1.2"
+
+  self:
+    path: ha-tool
+
+  remotes:
+    - name: zephyrproject-rtos
+      url-base: https://github.com/zephyrproject-rtos
+
+  group-filter: [+babblesim]
+
+  projects:
+    - name: zephyr
+      remote: zephyrproject-rtos
+      revision: v4.5.0
+      import:
+        name-allowlist:
+          - babblesim_base
+          - babblesim_ext_2G4_channel_NtNcable
+          - babblesim_ext_2G4_channel_multiatt
+          - babblesim_ext_2G4_device_WLAN_actmod
+          - babblesim_ext_2G4_device_burst_interferer
+          - babblesim_ext_2G4_device_playback
+          - babblesim_ext_2G4_libPhyComv1
+          - babblesim_ext_2G4_modem_BLE_simple
+          - babblesim_ext_2G4_modem_magic
+          - babblesim_ext_2G4_phy_v1
+          - babblesim_ext_libCryptov1
+          - bsim
+          - cmsis
+          - cmsis_6
+          - hal_nordic
+          - liblc3
+          - libmetal
+          - mbedtls
+          - nrf_hw_models
+          - open-amp
+          - segger
+          - tf-psa-crypto
+          - tf-psa-crypto-drivers

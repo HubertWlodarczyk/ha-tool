@@ -1,0 +1,20 @@
+# Copyright (c) 2026 Hubert Włodarczyk
+# SPDX-License-Identifier: MPL-2.0
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hatool"
+version = "0.2.0"
+description = "Client for ha_tool (nRF5340 DK tool for hearing aid Bluetooth LE connectivity tests)"
+requires-python = ">=3.9"
+license = {text = "MPL-2.0"}
+dependencies = ["pyserial>=3.4"]
+
+[tool.setuptools]
+packages = ["hatool"]
+
+[tool.setuptools.package-data]
+hatool = ["py.typed"]

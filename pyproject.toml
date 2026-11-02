@@ -1,0 +1,31 @@
+# Copyright (c) 2026 Hubert Włodarczyk
+# SPDX-License-Identifier: MPL-2.0
+
+# Tooling for the Python code of the repository (tests, scripts, tools, clients/python).
+# The client package has its own packaging in clients/python/pyproject.toml.
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+extend-exclude = ["build", "clients/java", "tests/out"]
+
+[tool.ruff.format]
+exclude = ["clients/python/hatool/_generated.py"]  # generated: tools/protogen
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "UP", "B", "SIM", "RUF"]
+ignore = [
+    "RUF001", "RUF002", "RUF003",  # non-ASCII letters in test strings are intended
+    "SIM105",                      # explicit try/except/pass reads better in reader loops
+]
+
+[tool.ruff.lint.per-file-ignores]
+"clients/python/hatool/_generated.py" = ["E501"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["hatool", "simlib", "conftest", "helpers"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: long runs (fuzzing, soak); scripts/test.sh -m slow"]
+addopts = "-m 'not slow'"
