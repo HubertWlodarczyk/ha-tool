@@ -20,6 +20,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          path: leabench
 
       - name: Install system dependencies
         run: |
@@ -42,10 +44,10 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install west cmake ninja ruff pytest
-          west init -l .
+          west init -l leabench
           west update --narrow -o=--depth=1
           west packages pip --install --ignore-venv-check
-          scripts/apply_patches.sh "$GITHUB_WORKSPACE/zephyr"
+          leabench/scripts/apply_patches.sh "$GITHUB_WORKSPACE/zephyr"
 
       - name: Build BabbleSim
         run: |
@@ -64,13 +66,13 @@ jobs:
           } >> "$GITHUB_ENV"
 
       - name: Run repository lint
-        run: scripts/lint.sh
+        run: leabench/scripts/lint.sh
 
       - name: Build simulation
-        run: scripts/build.sh sim
+        run: leabench/scripts/build.sh sim
 
       - name: Run simulation tests
-        run: scripts/test.sh
+        run: leabench/scripts/test.sh
 
       - name: Upload simulation logs
         if: always()

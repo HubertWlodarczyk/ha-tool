@@ -15,10 +15,11 @@ Install the prerequisites for Zephyr and BabbleSim:
 - `pytest` and `ruff` for the Python tooling,
 - a JDK 17 or newer if you are changing the Java client.
 
-From the repository root, initialize the west workspace and fetch dependencies:
+Because the manifest keeps the application at `leabench/`, run these commands
+from the directory containing the checkout:
 
 ```sh
-west init -l .
+west init -l leabench
 west update
 west packages pip --install --ignore-venv-check
 ```
@@ -26,13 +27,13 @@ west packages pip --install --ignore-venv-check
 Apply the Zephyr patches required by this repository. The command is idempotent:
 
 ```sh
-scripts/apply_patches.sh "$PWD/zephyr"
+leabench/scripts/apply_patches.sh "$PWD/zephyr"
 ```
 
 If Zephyr is not at `$ZEPHYR_BASE`, pass its path explicitly:
 
 ```sh
-scripts/apply_patches.sh /path/to/zephyr
+leabench/scripts/apply_patches.sh /path/to/zephyr
 ```
 
 Build the BabbleSim host binaries. This is required before building or running
@@ -55,22 +56,22 @@ export BSIM_COMPONENTS_PATH="$PWD/tools/bsim/components"
 Build both the leabench firmware and the simulated device:
 
 ```sh
-scripts/build.sh sim
+leabench/scripts/build.sh sim
 ```
 
 Run the default test suite:
 
 ```sh
-scripts/test.sh
+leabench/scripts/test.sh
 ```
 
 Useful variants:
 
 ```sh
-scripts/test.sh -k broadcast       # select tests by name
-scripts/test.sh -m slow            # run only long fuzzing/soak tests
-scripts/build.sh sim --sanitize    # ASan + UBSan build
-scripts/build.sh sim --coverage    # coverage build
+leabench/scripts/test.sh -k broadcast       # select tests by name
+leabench/scripts/test.sh -m slow            # run only long fuzzing/soak tests
+leabench/scripts/build.sh sim --sanitize    # ASan + UBSan build
+leabench/scripts/build.sh sim --coverage    # coverage build
 ```
 
 Simulation logs and binaries are written below `build/` and `tests/out/`. They
@@ -81,7 +82,7 @@ are local artifacts and are intentionally ignored by Git.
 Start a TCP simulation:
 
 ```sh
-scripts/sim.py --tcp 7000
+leabench/scripts/sim.py --tcp 7000
 ```
 
 In another terminal, connect with the Python client:
@@ -100,7 +101,7 @@ For a complete client example, see [clients/python/README.md](../clients/python/
 Build the nRF5340 DK image and flash it using the normal Zephyr runner:
 
 ```sh
-scripts/build.sh dk
+leabench/scripts/build.sh dk
 west flash -d build/leabench_dk
 ```
 
@@ -109,7 +110,7 @@ device such as `/dev/ttyACM0` (or `COM3` on Windows). Run the same tests against
 hardware with:
 
 ```sh
-scripts/test.sh --hw-port /dev/ttyACM0
+leabench/scripts/test.sh --hw-port /dev/ttyACM0
 ```
 
 Use the hardware tests only with a board running the matching firmware; tests
@@ -120,13 +121,13 @@ that require the simulated device are skipped in this mode.
 Regenerate protocol outputs after changing `protocol/leabench.yaml`:
 
 ```sh
-python3 tools/protogen/gen.py
+python3 leabench/tools/protogen/gen.py
 ```
 
 Then run the repository checks:
 
 ```sh
-scripts/lint.sh
+leabench/scripts/lint.sh
 ```
 
 If a generated file is reported as stale, do not edit it by hand. Regenerate it
