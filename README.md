@@ -91,7 +91,6 @@ python3 -m venv .venv && . .venv/bin/activate
 pip install west cmake ninja
 west init -l leabench
 west update --narrow -o=--depth=1
-west update bsim --narrow -o=--depth=1
 west patch apply                       # patches from leabench/zephyr/patches.yml
 west packages pip --install
 export ZEPHYR_BASE=$PWD/zephyr BSIM_OUT_PATH=$PWD/tools/bsim BSIM_COMPONENTS_PATH=$PWD/tools/bsim/components

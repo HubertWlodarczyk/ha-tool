@@ -44,7 +44,6 @@ jobs:
           python -m pip install west cmake ninja ruff pytest
           west init -l .
           west update --narrow -o=--depth=1
-          west update bsim --narrow -o=--depth=1
           west packages pip --install --ignore-venv-check
           scripts/apply_patches.sh "$GITHUB_WORKSPACE/zephyr"
 
