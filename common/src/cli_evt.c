@@ -117,31 +117,23 @@ size_t cli_evt_filter_list(char *buf, size_t len)
 	return pos;
 }
 
-void cli_evt(const char *name, const char *fmt, ...)
+/* Formats one event into text (body is scratch) and queues it */
+static void evt_queue(char *body, char *text, size_t text_len, const char *name, const char *fmt,
+		      va_list ap)
 {
-	struct evt_line line;
-	char body[CLI_LINE_MAX];
 	bool queued = false;
-	va_list ap;
 	uint16_t n;
 	int len;
 
-	if (evt_filtered(name)) {
-		return;
-	}
-
-	va_start(ap, fmt);
 	len = cli_vformat_line(body, fmt, ap);
-	va_end(ap);
+	snprintf(text, text_len, "EVT t=%lld %.*s%s%s", k_uptime_get(), EVT_NAME_MAX, name,
+		 len > 0 ? " " : "", body);
 
-	snprintf(line.text, sizeof(line.text), "EVT t=%lld %.*s%s%s", k_uptime_get(), EVT_NAME_MAX,
-		 name, len > 0 ? " " : "", body);
-
-	n = strlen(line.text);
+	n = strlen(text);
 	K_SPINLOCK(&evt_lock) {
 		if (ring_buf_space_get(&evt_rb) >= sizeof(n) + n) {
 			ring_buf_put(&evt_rb, (const uint8_t *)&n, sizeof(n));
-			ring_buf_put(&evt_rb, (const uint8_t *)line.text, n);
+			ring_buf_put(&evt_rb, (const uint8_t *)text, n);
 			queued = true;
 		}
 	}
@@ -152,6 +144,44 @@ void cli_evt(const char *name, const char *fmt, ...)
 		atomic_inc(&evt_dropped);
 		atomic_inc(&evt_dropped_total);
 	}
+}
+
+/* From an ISR (no mutex): the buffers go on the interrupt stack, kept out of cli_evt's frame */
+static __noinline void evt_queue_isr(const char *name, const char *fmt, va_list ap)
+{
+	char body[CLI_LINE_MAX];
+	char text[EVT_LINE_MAX];
+
+	evt_queue(body, text, sizeof(text), name, fmt, ap);
+}
+
+/*
+ * Threads format into static buffers under a mutex: cli_evt is called from Bluetooth callbacks
+ * deep in the host's RX thread, where ~700 octets of line buffers on the caller's stack were
+ * what overflowed it on the board (the simulation runs threads on host stacks and cannot see
+ * it; scripts/stack_report.py).
+ */
+static K_MUTEX_DEFINE(evt_fmt_lock);
+static char evt_body[CLI_LINE_MAX];
+static char evt_text[EVT_LINE_MAX];
+
+void cli_evt(const char *name, const char *fmt, ...)
+{
+	va_list ap;
+
+	if (evt_filtered(name)) {
+		return;
+	}
+
+	va_start(ap, fmt);
+	if (k_is_in_isr()) {
+		evt_queue_isr(name, fmt, ap);
+	} else {
+		k_mutex_lock(&evt_fmt_lock, K_FOREVER);
+		evt_queue(evt_body, evt_text, sizeof(evt_text), name, fmt, ap);
+		k_mutex_unlock(&evt_fmt_lock);
+	}
+	va_end(ap);
 }
 
 void cli_evt_stats_get(struct cli_stats *st)
@@ -235,7 +265,8 @@ static void print_evt(const struct shell *sh, const char *text)
 
 	if (cli_proto_get() == CLI_PROTO_HUMAN) {
 		char evt_name[EVT_NAME_MAX + 1];
-		char sentence[CLI_LINE_MAX];
+		/* Only the event thread prints: static, not on its stack */
+		static char sentence[CLI_LINE_MAX];
 		const size_t n =
 			MIN(body != NULL ? (size_t)(body - name) : strlen(name), EVT_NAME_MAX);
 
@@ -265,7 +296,7 @@ static void print_evt(const struct shell *sh, const char *text)
 
 static void evt_thread(void *p1, void *p2, void *p3)
 {
-	struct evt_line line;
+	static struct evt_line line; /* this thread only: off its stack */
 
 	ARG_UNUSED(p1);
 	ARG_UNUSED(p2);
@@ -295,4 +326,7 @@ static void evt_thread(void *p1, void *p2, void *p3)
 	}
 }
 
-K_THREAD_DEFINE(cli_evt_tid, 2048, evt_thread, NULL, NULL, NULL, K_PRIO_PREEMPT(10), 0, 0);
+/* print_evt -> shell -> UART transport: 1.8 KB worst case by scripts/stack_report.py, plus the
+ * shell's calls through pointers it cannot follow
+ */
+K_THREAD_DEFINE(cli_evt_tid, 3072, evt_thread, NULL, NULL, NULL, K_PRIO_PREEMPT(10), 0, 0);

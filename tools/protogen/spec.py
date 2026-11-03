@@ -16,8 +16,19 @@ COPYRIGHT = "Copyright (c) 2026 Hubert Włodarczyk"
 SPDX = "SPDX-License-Identifier: MPL-2.0"
 
 
+# 'help' formats a command's usage and doc into buffers of CLI_LINE_MAX / 2 (common/cli_tree.c);
+# a longer text is cut off (and counted as a truncated line by 'cli stats')
+DOC_MAX = 155
+
+
 def load(path: pathlib.Path) -> dict:
-    return yaml.safe_load(path.read_text())
+    spec = yaml.safe_load(path.read_text())
+    for c in spec.get("commands", []):
+        if len(c.get("doc", "")) > DOC_MAX:
+            raise SystemExit(
+                f"{path}: doc of '{c['cmd']}' has {len(c['doc'])} characters, at most {DOC_MAX}"
+            )
+    return spec
 
 
 @dataclass

@@ -418,8 +418,7 @@ const struct cli_cmd cli_cmds[] = {
 	 .keys = NULL,
 	 .flags = NULL,
 	 .usage = "",
-	 .help = "Running roles of the controller (vendor Read Schedule, Zephyr patch 0013): next "
-		 "event, period and reserved slot of each, and reservations that overlap within 60 "
+	 .help = "Controller roles with next event, period and slot (patch 0013), overlaps in 60 "
 		 "ms; proto human: a timeline"},
 	{.path = "version",
 	 .handler = cmd_version,

@@ -20,8 +20,7 @@ public final class RadioCommands {
     }
 
     /**
-     * Running roles of the controller (vendor Read Schedule, Zephyr patch 0013): next event, period and reserved slot
-     * of each, and reservations that overlap within 60 ms; proto human: a timeline
+     * Controller roles with next event, period and slot (patch 0013), overlaps in 60 ms; proto human: a timeline
      * <p>Reply: count (int), overlaps (int), window_us (int)
      */
     public Reply schedule() {

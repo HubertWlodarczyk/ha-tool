@@ -8,8 +8,8 @@
 #   scripts/build.sh sim -p     pristine rebuild
 #   scripts/build.sh sim --sanitize   ASan + UBSan, output in build/<app>_asan
 #   scripts/build.sh sim --coverage   gcov, output in build/<app>_cov
-#   scripts/build.sh dk --diag        stack measurement shell commands (leabench/diag.conf),
-#                                     output in build/<app>_dk_diag
+#   scripts/build.sh dk --diag        stack report every 10 s on RTT + canaries + shell commands
+#                                     (leabench/diag.conf), output in build/<app>_dk_diag
 # Tests use a variant with LEA_VARIANT=asan|cov scripts/test.sh
 set -euo pipefail
 

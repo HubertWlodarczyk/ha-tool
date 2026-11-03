@@ -126,6 +126,16 @@ LEA_PHY_ARGS=-dump_imm scripts/test.sh -k <test>   # full radio dumps in $BSIM_O
 scripts/airtime.py <sim_id> --from-ms 5000         # streams, intervals, occupancy, causes of CIS losses
 ```
 
+Stacks (the simulation cannot show a stack overflow: in BabbleSim every thread runs on a host
+stack, so only the board's MPU guard catches it):
+
+```
+scripts/stack_report.py --build  # DK images with -fstack-usage: each thread's stack next to the
+                                 # deepest chain of direct calls, largest frames, deepest chains
+scripts/build.sh dk --diag       # on the board: every thread's used / size on RTT every 10 s,
+                                 # stack canaries, 'kernel thread stacks'
+```
+
 Limits and memory (the numbers in "How many BIGs and BISes at once" and "On hardware"):
 
 ```
@@ -713,6 +723,7 @@ Found and fixed:
 | Two refused BIGs left broadcast unusable until reset (patch 0012) | acceptance matrix: after two refusals every BIG got `ERR -5` (Memory Capacity Exceeded) | BIS streams of a refused LE Create BIG were never returned |
 | The simulated device sometimes never synchronized to a PA (`dut_sim`) | capacity matrix: one 7.5 ms encrypted BIG "not found" every run | it stopped scanning before the PA sync was established; it now scans until then |
 | `broadcast budget` promised one BIS more than `start` accepted | capacity matrix | its probe BIG had no name or PBP, so the controller limit was computed with too little advertising data |
+| Stack overflows on the board (first run on hardware) | the board's MPU guard; `scripts/stack_report.py` (the simulation runs threads on host stacks and could not show it) | `cli_evt` formatted each event into ~700 B of buffers on the caller's stack, deep inside Bluetooth callbacks of the 2 KB RX thread; the event thread had 1.8 KB of 2 KB in direct calls; the net core's HCI command thread (LE Create BIG with the phase search of patch 0006) and main thread had little headroom. Event buffers are static now (thread paths use 44 B), and the BT RX, event, HCI command and net core main / work queue stacks were raised |
 | Reconnecting the same identity failed with `ERR -22 connect failed` until reboot (patch 0010) | UX walk on the simulation (`mode broadcast`, `reset`, then the same flow again); narrowed down to any disconnection after volume control, visible when the identity id is reused | a tester could not reconnect a device after a session with volume control |
 | Volume control failed after any reconnection (patch 0011) | the new reconnection test; `source_error op=vol_set err=128` (Invalid Change Counter) once VCP write errors were reported at all | `le-source volume` silently did nothing on devices whose volume had changed; VCP write errors are now reported as `source_error` |
 | A music start during an alert was dropped | code review | `le-source music start` while an alert played from idle answered `deferred`, then never played |
