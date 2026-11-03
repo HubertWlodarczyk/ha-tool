@@ -9,7 +9,8 @@ full reference is in [README.md](../README.md); the CLI reference is generated i
 Install the prerequisites for Zephyr and BabbleSim:
 
 - Python 3.9 or newer,
-- a Zephyr SDK and a working `west` installation,
+- a working `west` installation (the Zephyr SDK is additionally needed for a
+  physical DK build),
 - a C compiler and the host tools required by BabbleSim,
 - `pytest` and `ruff` for the Python tooling,
 - a JDK 17 or newer if you are changing the Java client.
@@ -19,18 +20,34 @@ From the repository root, initialize the west workspace and fetch dependencies:
 ```sh
 west init -l .
 west update
+west packages pip --install --ignore-venv-check
 ```
 
 Apply the Zephyr patches required by this repository. The command is idempotent:
 
 ```sh
-scripts/apply_patches.sh
+scripts/apply_patches.sh "$PWD/zephyr"
 ```
 
 If Zephyr is not at `$ZEPHYR_BASE`, pass its path explicitly:
 
 ```sh
 scripts/apply_patches.sh /path/to/zephyr
+```
+
+Build the BabbleSim host binaries. This is required before building or running
+the simulation:
+
+```sh
+make -C tools/bsim everything BSIM_BUILD_FAIL_ASAP=1 -j"$(nproc)"
+```
+
+Set the workspace paths used by the simulation helpers:
+
+```sh
+export ZEPHYR_BASE="$PWD/zephyr"
+export BSIM_OUT_PATH="$PWD/tools/bsim"
+export BSIM_COMPONENTS_PATH="$PWD/tools/bsim/components"
 ```
 
 ## 2. Build and run the simulation
@@ -51,7 +68,7 @@ Useful variants:
 
 ```sh
 scripts/test.sh -k broadcast       # select tests by name
-scripts/test.sh -m slow            # include long fuzzing/soak tests
+scripts/test.sh -m slow            # run only long fuzzing/soak tests
 scripts/build.sh sim --sanitize    # ASan + UBSan build
 scripts/build.sh sim --coverage    # coverage build
 ```
