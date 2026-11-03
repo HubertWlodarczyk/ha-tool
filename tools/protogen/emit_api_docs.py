@@ -40,9 +40,8 @@ def _java_call(c: dict) -> str:
     if options:
         cls = camel(c["cmd"].replace(" ", "_"), upper=True) + "Options"
         opts = f"new {cls}()" + "".join(
-            f".{camel(o['name'])}()"
-            if o in c.get("flags", [])
-            else f".{camel(o['name'])}(...)" for o in options
+            f".{camel(o['name'])}()" if o in c.get("flags", []) else f".{camel(o['name'])}(...)"
+            for o in options
         )
         args.append(opts)
     return f"{parent}.{java_name(words[-1], c['cmd'])}({', '.join(args)})"
@@ -57,7 +56,9 @@ def generate(spec: dict, language: str) -> str:
     if language == "python":
         intro += "Replies are `Reply` objects; use attributes or `rows(tag)` for data rows."
     else:
-        intro += "Replies are `Reply` objects; use `getInt`, `getString`, `getDouble`, or `getBool`."
+        intro += (
+            "Replies are `Reply` objects; use `getInt`, `getString`, `getDouble`, or `getBool`."
+        )
     out = [f"<!-- {HEADER} -->", "", f"# leabench {title} command reference", "", intro, ""]
     for c in spec["commands"]:
         out += [f"## `{c['cmd']}`", "", c.get("doc", ""), "", "Example:", "", "```"]

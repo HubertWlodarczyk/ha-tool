@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: MPL-2.0
 
 """Create a small broadcast in the simulator."""
+
 from leabench import LeaBench
 
 

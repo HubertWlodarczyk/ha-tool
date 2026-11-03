@@ -22,8 +22,8 @@ import pathlib
 import subprocess
 import sys
 
-import emit_c
 import emit_api_docs
+import emit_c
 import emit_java
 import emit_markdown
 import emit_python
