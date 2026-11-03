@@ -94,7 +94,7 @@ west update --narrow -o=--depth=1
 west patch apply                       # patches from leabench/zephyr/patches.yml
 west packages pip --install
 export ZEPHYR_BASE=$PWD/zephyr BSIM_OUT_PATH=$PWD/tools/bsim BSIM_COMPONENTS_PATH=$PWD/tools/bsim/components
-(cd tools/bsim && make everything -j$(nproc))
+test -x tools/bsim/bin/bs_2G4_phy_v1
 leabench/scripts/build.sh && leabench/scripts/test.sh
 ```
 

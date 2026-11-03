@@ -46,10 +46,8 @@ jobs:
           west packages pip --install --ignore-venv-check
           scripts/apply_patches.sh "$GITHUB_WORKSPACE/zephyr"
 
-      - name: Build BabbleSim
-        run: |
-          mkdir -p tools/bsim
-          make -C tools/bsim everything -j"$(nproc)"
+      - name: Verify BabbleSim
+        run: test -x tools/bsim/bin/bs_2G4_phy_v1
 
       - name: Configure workspace paths
         run: |
