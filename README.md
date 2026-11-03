@@ -92,7 +92,7 @@ pip install west cmake ninja
 west init -l leabench
 west update --narrow -o=--depth=1
 west patch apply                       # patches from leabench/zephyr/patches.yml
-pip install -r zephyr/scripts/requirements-base.txt -r zephyr/scripts/requirements-build-test.txt
+west packages pip --install
 export ZEPHYR_BASE=$PWD/zephyr BSIM_OUT_PATH=$PWD/tools/bsim BSIM_COMPONENTS_PATH=$PWD/tools/bsim/components
 (cd tools/bsim && make everything -j$(nproc))
 leabench/scripts/build.sh && leabench/scripts/test.sh
