@@ -1,0 +1,81 @@
+name: Release firmware
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  firmware:
+    name: Build nRF5340 DK firmware
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            gcc-multilib \
+            g++-multilib \
+            ninja-build \
+            python3-venv \
+            wget
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Set up west workspace
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install west
+          west init -l .
+          west update --narrow -o=--depth=1
+          python -m pip install \
+            -r zephyr/scripts/requirements-base.txt \
+            -r zephyr/scripts/requirements-build-test.txt
+          scripts/apply_patches.sh "$GITHUB_WORKSPACE/zephyr"
+
+      - name: Install Zephyr SDK
+        run: |
+          sdk_version="$(cat zephyr/SDK_VERSION)"
+          wget -q "https://github.com/zephyrproject-rtos/sdk-ng/releases/download/v${sdk_version}/zephyr-sdk-${sdk_version}_linux-x86_64.tar.xz"
+          tar -xf "zephyr-sdk-${sdk_version}_linux-x86_64.tar.xz"
+          "zephyr-sdk-${sdk_version}/setup.sh" -t arm-zephyr-eabi -h -c
+          echo "ZEPHYR_TOOLCHAIN_VARIANT=zephyr" >> "$GITHUB_ENV"
+          echo "ZEPHYR_SDK_INSTALL_DIR=$GITHUB_WORKSPACE/zephyr-sdk-${sdk_version}" >> "$GITHUB_ENV"
+
+      - name: Build firmware
+        run: scripts/build.sh dk
+
+      - name: Merge application and network-core images
+        run: |
+          mkdir -p release
+          python3 zephyr/scripts/build/mergehex.py \
+            --overlap replace \
+            -o release/leabench-nrf5340dk.hex \
+            build/leabench_dk/leabench/zephyr/zephyr.hex \
+            build/leabench_dk/hci_ipc/zephyr/zephyr.hex
+          python3 zephyr/scripts/build/mergehex.py \
+            --overlap replace \
+            --output-bin \
+            -o release/leabench-nrf5340dk.bin \
+            build/leabench_dk/leabench/zephyr/zephyr.hex \
+            build/leabench_dk/hci_ipc/zephyr/zephyr.hex
+          sha256sum release/*
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            release/leabench-nrf5340dk.hex
+            release/leabench-nrf5340dk.bin

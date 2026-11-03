@@ -1,0 +1,81 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  simulation:
+    name: Build and test simulation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            clang-format \
+            gcc-multilib \
+            g++-multilib \
+            default-jdk \
+            perl
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Set up west workspace
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install west cmake ninja ruff pytest
+          west init -l .
+          west update --narrow -o=--depth=1
+          python -m pip install \
+            -r zephyr/scripts/requirements-base.txt \
+            -r zephyr/scripts/requirements-build-test.txt
+          scripts/apply_patches.sh "$GITHUB_WORKSPACE/zephyr"
+
+      - name: Build BabbleSim
+        run: |
+          mkdir -p tools/bsim
+          make -C tools/bsim everything -j"$(nproc)"
+
+      - name: Configure workspace paths
+        run: |
+          {
+            echo "ZEPHYR_BASE=$GITHUB_WORKSPACE/zephyr"
+            echo "BSIM_OUT_PATH=$GITHUB_WORKSPACE/tools/bsim"
+            echo "BSIM_COMPONENTS_PATH=$GITHUB_WORKSPACE/tools/bsim/components"
+          } >> "$GITHUB_ENV"
+
+      - name: Run repository lint
+        run: scripts/lint.sh
+
+      - name: Build simulation
+        run: scripts/build.sh sim
+
+      - name: Run simulation tests
+        run: scripts/test.sh
+
+      - name: Upload simulation logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: simulation-logs
+          path: |
+            tests/out/
+            tools/bsim/results/
+          if-no-files-found: ignore

@@ -67,6 +67,19 @@ LICENSE         MPL-2.0; CONTRIBUTING.md: style, lint, how to add a command
 
 ## Getting started
 
+For the shortest path through setup, simulation, hardware, and pull-request
+checks, see the [quick guide](docs/quick-guide.md). The detailed setup below
+also documents the pinned Zephyr and BabbleSim dependencies.
+
+Runnable client examples are in [examples/](examples/), including a Python
+example for the simulator and a physical nRF5340 DK.
+
+Command references:
+
+- [CLI commands](docs/cli.md)
+- [Python client commands](docs/python.md)
+- [Java client commands](docs/java.md)
+
 The repository is a `west` manifest: it pins Zephyr **v4.5.0**, fetches only the modules it
 needs and applies the patches. Requirements: Python 3, git, gcc with 32-bit libraries
 (`lib32-glibc`, `lib32-gcc-libs`; the bsim boards build as 32-bit), `dtc`.

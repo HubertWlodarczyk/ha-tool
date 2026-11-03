@@ -23,6 +23,7 @@ import subprocess
 import sys
 
 import emit_c
+import emit_api_docs
 import emit_java
 import emit_markdown
 import emit_python
@@ -48,7 +49,11 @@ def clang_format(path: pathlib.Path, text: str) -> str:
 
 
 def outputs(spec: dict) -> dict[pathlib.Path, str]:
-    out = {PY_OUT: emit_python.generate(spec), DOC_OUT: emit_markdown.generate(spec)}
+    protocol_doc = emit_markdown.generate(spec)
+    out = {PY_OUT: emit_python.generate(spec), DOC_OUT: protocol_doc}
+    out[ROOT / "docs/python.md"] = emit_api_docs.generate(spec, "python")
+    out[ROOT / "docs/java.md"] = emit_api_docs.generate(spec, "java")
+    out[ROOT / "docs/cli.md"] = protocol_doc
     out.update({JAVA_DIR / name: text for name, text in emit_java.generate(spec).items()})
     out.update(
         {
