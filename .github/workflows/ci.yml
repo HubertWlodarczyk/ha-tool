@@ -29,6 +29,7 @@ jobs:
             gcc-multilib \
             g++-multilib \
             default-jdk \
+            make \
             perl
 
       - name: Set up Python
@@ -43,11 +44,17 @@ jobs:
           python -m pip install west cmake ninja ruff pytest
           west init -l .
           west update --narrow -o=--depth=1
+          west update bsim --narrow -o=--depth=1
           west packages pip --install --ignore-venv-check
           scripts/apply_patches.sh "$GITHUB_WORKSPACE/zephyr"
 
-      - name: Verify BabbleSim
-        run: test -x tools/bsim/bin/bs_2G4_phy_v1
+      - name: Build BabbleSim
+        run: |
+          make -C tools/bsim everything \
+            BSIM_BUILD_FAIL_ASAP=1 \
+            -j"$(nproc)"
+          test -x tools/bsim/bin/bs_2G4_phy_v1
+          test -x tools/bsim/bin/bs_device_handbrake
 
       - name: Configure workspace paths
         run: |
