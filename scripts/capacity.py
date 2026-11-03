@@ -180,6 +180,15 @@ def one_config(cfg: dict) -> list[dict]:
     return rows
 
 
+MULTI_REVERSED = [
+    # the edge cases with the small BIG started first (start order vs. phase placement)
+    [("16_2", 0, 3), ("16_2", 0, 8)],
+    [("16_2", 0, 5), ("16_2", 0, 6)],
+    [("16_2", 0, 2), ("16_2", 0, 3), ("16_2", 0, 3)],
+    [("16_2", 0, 1), ("16_2", 0, 3), ("16_2", 0, 4)],
+    [("16_2", 0, 2), ("48_4", 0, 2), ("48_4", 0, 2)],
+]
+
 MULTI = [
     # (preset, rtn, BIS count) per BIG
     [("16_2", 0, 8), ("16_2", 0, 3)],
@@ -291,7 +300,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    parser.add_argument("what", choices=["broadcast", "multi", "unicast", "accept"])
+    parser.add_argument(
+        "what", choices=["broadcast", "multi", "multi-reversed", "unicast", "accept"]
+    )
     parser.add_argument("--jobs", type=int, default=4, help="simulations in parallel")
     parser.add_argument("--quick", action="store_true", help="a smaller broadcast matrix")
     parser.add_argument("--presets", default=",".join(ACCEPT_PRESETS), help="accept: presets")
@@ -324,6 +335,8 @@ def main() -> None:
         cases, fn = broadcast_cases(args.quick, chosen), one_config
     elif args.what == "multi":
         cases, fn = MULTI, one_multi
+    elif args.what == "multi-reversed":
+        cases, fn = MULTI_REVERSED, one_multi
     else:
         cases = [(0, 0)] + [(k, i) for k in (1, 2) for i in (30, 50, 60, 100)]
         fn = unicast_case
@@ -337,7 +350,7 @@ def main() -> None:
                 rows.append(row)
 
     keys = list(dict.fromkeys(k for r in rows for k in r))
-    path = OUT / f"{args.what}.csv"
+    path = OUT / f"{args.what.replace('-', '_')}.csv"
     with open(path, "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=keys)
         w.writeheader()

@@ -422,6 +422,20 @@ encryption costs one BIS, the encrypted number is in parentheses:
 | before the patch 0006 fix: 8 + 3, 7 + 3, 7 + 2, 8 + 2 | 8–17% loss (PA on a BIG at the transmitter or at the receiver) |
 | before the patch 0006 fix: 4 + 4 + 3, 8 + 3 + 1 | AUX or primary advertising did not go out: the broadcast could not be found |
 
+**Start order and phases.** The edge cases started small BIG first (`scripts/capacity.py
+multi-reversed`) were lossless too: patch 0006 places every new periodic role in the largest free
+phase, so the order of `start` does not matter and `start --all` keeps the BIG numbers' order. All
+PA trains already share one phase, offset by whole BIG intervals. The AUX sets cannot join it,
+because their interval is the advertising interval plus the 10 ms random-delay range (70 ms next
+to 60 ms PA), so they drift against it.
+
+**Coded PHY costs capacity.** It raises the controller's event start-up from 428 to 733 µs
+(`EVENT_OVERHEAD_START_US`). Measured without it (`scripts/capacity.py accept`), the controller's
+reserve per BIG event drops by about 0.8 ms (2830 → 2030 µs), usually one more BIS per BIG on 1M
+PHY and with 7.5 ms frames (48_6/1M 4 → 5, 48_5/2M 6 → 7). It stays enabled because `bonding phy
+<id> coded` tests a hearing aid's long-range link; a broadcast-only build can drop it
+(`CONFIG_BT_CTLR_PHY_CODED=n` in `ha_tool/netcore.conf`, then refit `CTLR_RESERVE_US`).
+
 **Unicast** (`scripts/capacity.py unicast`): the music stream (48_2) to one hearing aid lost no
 frame next to 1 or 2 other connections (to a second hearing aid) with intervals of 30, 50, 60 or
 100 ms. Losses come only with a broadcast running next to the CIS (see "Found in simulation"),
