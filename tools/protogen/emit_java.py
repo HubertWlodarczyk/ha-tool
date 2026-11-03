@@ -1,7 +1,7 @@
 # Copyright (c) 2026 Hubert Włodarczyk
 # SPDX-License-Identifier: MPL-2.0
 
-"""Java client: command classes, option builders and protocol tables (io.hatool.gen)."""
+"""Java client: command classes, option builders and protocol tables (io.leabench.gen)."""
 
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ from spec import (
 )
 from writer import Code
 
-PACKAGE = "io.hatool.gen"
+PACKAGE = "io.leabench.gen"
 WIDTH = 120
 TYPES = {
     "int": "int",
@@ -38,7 +38,7 @@ TYPES = {
     "enum": "String",
 }
 IMPORTS = [
-    "io.hatool.Reply",
+    "io.leabench.Reply",
     "java.util.ArrayList",
     "java.util.Collections",
     "java.util.HashMap",
@@ -215,7 +215,7 @@ def _group(node: Node, cls: str, files: dict[str, str]) -> None:
     root = node.path == ""
     code = Code(indent=4, width=WIDTH)
     if root:
-        code.javadoc("Top level commands; io.hatool.HaTool extends this class.")
+        code.javadoc("Top level commands; io.leabench.LeaBench extends this class.")
         head = f"public abstract class {cls} {{"
     else:
         code.javadoc(f"'{node.path}' commands")

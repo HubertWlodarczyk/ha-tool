@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MPL-2.0
 
 """Link parameters: connection interval, latency, supervision timeout, PHY, data length, and the
-answer to the hearing aid's own parameter requests."""
+answer to the device's own parameter requests."""
 
 
 def connected(ha, addr, extra=""):
@@ -47,7 +47,7 @@ def test_phy_and_data_length(setup):
     ha.wait_evt("bonding_dle_updated", id=dev, tx_len=100, timeout=20)
 
 
-def test_hearing_aid_parameter_request(setup):
+def test_device_parameter_request(setup):
     ha, dut, addr = setup
     dev = connected(ha, addr, "interval=50")
 

@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MPL-2.0
 
 """CLI fuzzing on the live simulation: thousands of command lines generated from the protocol
-spec (protocol/hatool.yaml), valid and broken, in text and JSON mode.
+spec (protocol/leabench.yaml), valid and broken, in text and JSON mode.
 
 Invariants checked for every line:
   - exactly one final reply (OK / ERR / shell error), nothing left unanswered
@@ -11,7 +11,7 @@ Invariants checked for every line:
 At the end the board still answers, 'status' is consistent and no output line was cut.
 
 Deterministic (seeded); slow, run with: scripts/test.sh -m slow test_fuzz.py
-Environment: HA_FUZZ_LINES (default 2500), HA_FUZZ_SEED (default 1).
+Environment: LEA_FUZZ_LINES (default 2500), LEA_FUZZ_SEED (default 1).
 """
 
 from __future__ import annotations
@@ -30,9 +30,9 @@ from simlib.device import SHELL_ERR_RE as SHELL_ERR
 
 pytestmark = pytest.mark.slow
 
-SPEC = yaml.safe_load((ROOT / "protocol/hatool.yaml").read_text())
-LINES = int(os.environ.get("HA_FUZZ_LINES", "2500"))
-SEED = int(os.environ.get("HA_FUZZ_SEED", "1"))
+SPEC = yaml.safe_load((ROOT / "protocol/leabench.yaml").read_text())
+LINES = int(os.environ.get("LEA_FUZZ_LINES", "2500"))
+SEED = int(os.environ.get("LEA_FUZZ_SEED", "1"))
 # Commands that change the protocol or restart the board are driven by the fuzzer itself
 DRIVEN = {"proto"}
 REPLY_TIMEOUT = 15.0
@@ -65,7 +65,7 @@ INTS = [
 ]
 STRS = [
     "a",
-    "Hearing Test",
+    "Listening Test",
     "x" * 31,
     "x" * 32,
     "y" * 200,

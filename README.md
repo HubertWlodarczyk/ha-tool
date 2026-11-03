@@ -1,25 +1,28 @@
-# HA-Tool: a Bluetooth LE test tool for hearing aid connectivity testers (nRF5340)
+# leabench: an LE Audio test bench on the nRF5340
 
-Firmware for the **nRF5340 DK** that plays, over Bluetooth LE, whatever a tester needs on the
-other side of a hearing aid. It is driven through a CLI over USB (VCOM), with **Python and
+**leabench** is firmware for the **nRF5340 DK** that plays the other side of a Bluetooth LE Audio
+product under test: earbuds, headphones, speakers or any other LE Audio sink. It acts as a phone
+(unicast audio, calls, media, volume), as many phones at once (identities and bonds) or as a set
+of broadcast transmitters, and it is driven through a CLI over USB (VCOM), with **Python and
 Java** libraries for automation.
 
 | Feature | Description |
 |---|---|
-| **Identities and bonds** (`bonding`) | Every virtual identity has its own BLE identity (address, IRK, keys) and connects with a changing RPA like a real phone. Everything lives in RAM only (**the tool never writes to flash**), so a board reset clears the list. Identities connect and bond with the hearing aid one after another: filling the bond list, checking which device the hearing aid evicted, reconnections, "the phone forgot the device". Just Works, passkey or numeric comparison pairing; connection parameters (interval, latency, timeout, PHY, data length). Connect by address or by Bluetooth name. |
-| **LE Audio source** (`le-source`, e.g. a phone) | LE Audio unicast with the Media, Ringtone, Conversational and Alerts contexts. Calls through TBS/CCP (incoming, outgoing, answered on the hearing aid, hold, end), music through MCS/MCP (play/pause also from the hearing aid), volume through VCP, and, like a companion app: presets (HAS), microphone (MICP/AICS) and balance (VOCS). Losses of the hearing aid's microphone stream are counted from sequence numbers. |
-| **Auracast** (`broadcast`) | A broadcast builder: the tester composes the BIG, its subgroups (preset, language, context) and BISes (channel, sampling rate, octets, tone). Up to 3 BIGs at once, up to 8 BIS and 4 subgroups per BIG, up to 11 BIS in total without loss (e.g. 8 + 3). Encryption (each BIG with its own code), PBP (SQ/HQ), PHY, RTN, interval, TX power; a shared airtime budget across all BIGs (`broadcast budget`); operations on every BIG (`--all`) with a result per BIG; tone, level, power and metadata changed live. |
+| **Identities and bonds** (`bonding`) | Every virtual identity has its own BLE identity (address, IRK, keys) and connects with a changing RPA like a real phone. Everything lives in RAM only (**the tool never writes to flash**), so a board reset clears the list. Identities connect to and bond with the device under test one after another: filling its bond list, checking which bond it evicts, reconnections, "the phone forgot the device". Just Works, passkey or numeric comparison pairing; connection parameters (interval, latency, timeout, PHY, data length). Connect by address or by Bluetooth name. |
+| **LE Audio source** (`le-source`, e.g. a phone) | LE Audio unicast with the Media, Ringtone, Conversational and Alerts contexts. Calls through TBS/CCP (incoming, outgoing, answered on the device, hold, end), music through MCS/MCP (play/pause also from the device), volume through VCP, and, like a companion app, presets (HAS), microphone (MICP/AICS) and balance (VOCS). Losses of the device's microphone stream are counted from sequence numbers. |
+| **Broadcast** (`broadcast`, Auracast™-style) | A broadcast builder: the tester composes the BIG, its subgroups (preset, language, context) and BISes (channel, sampling rate, octets, tone). Up to 3 BIGs at once, up to 8 BIS and 4 subgroups per BIG, up to 11 BIS in total without loss (e.g. 8 + 3). Encryption (each BIG with its own code), PBP (SQ/HQ), PHY, RTN, interval, a common ISO interval for 7.5 + 10 ms BIGs, TX power; a shared airtime budget across all BIGs (`broadcast budget`) checked against the controller's own limits, and its real schedule (`radio schedule`); operations on every BIG (`--all`) with a result per BIG; tone, level, power and metadata changed live. |
 | **Audio** | Ready-made LC3 frames from a table (no encoder on the board): all 16 BAP configurations (8–48 kHz including 44.1, 7.5 and 10 ms frames), about 2070 tones up to 8 kHz, level from −40 to −2 dBFS. A separate tone per BIS / stream, ringtone and beep patterns. |
 
 Until a board is available, everything runs in **simulation** (Zephyr `nrf5340bsim` +
-BabbleSim). Tests use a simulated hearing aid, **`dut_sim`**, which decodes the audio and reports
-the tone it hears, so the tests check the audio content and not only the signalling.
+BabbleSim). The tests use a simulated device under test, **`dut_sim`**, an LE Audio sink that
+decodes the audio and reports the tone it hears, so the tests check the audio content and not
+only the signalling.
 
 ## Layout
 
 ```
-ha_tool/        the tool firmware (Zephyr application, nRF5340 app core)
-  src/cli_table.c   command table (generated from protocol/hatool.yaml); sys_cmds.c: modes,
+leabench/        the tool firmware (Zephyr application, nRF5340 app core)
+  src/cli_table.c   command table (generated from protocol/leabench.yaml); sys_cmds.c: modes,
                     status, stop, reset
   src/dev*.c        'bonding' identities (dev.c: identities and callbacks, dev_cmds.c /
                     dev_link_cmds.c: commands, name scan)
@@ -30,7 +33,7 @@ ha_tool/        the tool firmware (Zephyr application, nRF5340 app core)
   src/bcast/        Auracast builder: model.c (drafts), budget.c (airtime),
                     source.c (Zephyr broadcast source), args.c / validate.c,
                     cmds.c / run_cmds.c (commands)
-  src/hacontrol.c   hearing aid presets (HAS) and microphone (MICP), like a companion app
+  src/remotectl.c   device presets (HAS) and microphone (MICP), like a companion app
   src/human_evt.c   events described in words for 'proto human'
   src/*.h           module APIs (mode.h, dev.h, audio_tx.h, phone.h, bcast.h, version.h)
   src/presets.c     shared LC3 preset table (all 16 BAP configurations)
@@ -38,20 +41,20 @@ ha_tool/        the tool firmware (Zephyr application, nRF5340 app core)
   src/lc3_frames.c  GENERATED LC3 frame table (scripts/gen_lc3_frames.sh)
   src/board.c       DK only: app core at 128 MHz
   netcore.conf      own, trimmed controller configuration (net core)
-  Kconfig           limits (HA_BCAST_MAX_BIGS / _SUBGROUPS / _BIS / _BIS_TOTAL)
-dut_sim/        simulated hearing aid (simulation/tests only): main.c (connections),
-                pairing.c (bonds, IO), ctrl.c (CCP/MCP buttons), ha_services.c (VCP, HAS,
+  Kconfig           limits (LEA_BCAST_MAX_BIGS / _SUBGROUPS / _BIS / _BIS_TOTAL)
+dut_sim/        simulated device (simulation/tests only): main.c (connections),
+                pairing.c (bonds, IO), ctrl.c (CCP/MCP buttons), audio_services.c (VCP, HAS,
                 MICP), unicast.c / bsink.c / audio_rx.c (audio reception and measurement)
 common/         CLI: cli_out.c (text/json/human), cli_evt.c (events), cli_parse.c
                 (arguments, command keys), cli_tree.c (dispatcher, help, hints);
                 hci_util.c (RSSI, power); dut_sim controller
 tools/lc3gen/   LC3 frame table generator (host, liblc3)
-protocol/       hatool.yaml: CLI protocol specification (single source of truth)
+protocol/       leabench.yaml: CLI protocol specification (single source of truth)
 tools/protogen/ generator: firmware command table, Python/Java clients and docs/protocol.md
                 from the specification (spec.py, writer.py, emit_c.py, emit_python.py,
                 emit_java.py, emit_markdown.py)
-clients/python/ Python library (package hatool)
-clients/java/   Java library (Gradle, io.hatool)
+clients/python/ Python library (package leabench)
+clients/java/   Java library (Gradle, io.leabench)
 docs/           protocol.md: generated command and event reference; broadcast-ux.md: CLI design
 west.yml        west manifest (Zephyr v4.5.0 + modules)
 zephyr/         module.yml, patches.yml and the Zephyr patches (west patch)
@@ -70,16 +73,16 @@ needs and applies the patches. Requirements: Python 3, git, gcc with 32-bit libr
 
 ```
 mkdir ha-ws && cd ha-ws
-git clone https://github.com/HubertWlodarczyk/ha-tool.git
+git clone https://github.com/HubertWlodarczyk/leabench.git
 python3 -m venv .venv && . .venv/bin/activate
 pip install west cmake ninja
-west init -l ha-tool
+west init -l leabench
 west update --narrow -o=--depth=1
-west patch apply                       # patches from ha-tool/zephyr/patches.yml
+west patch apply                       # patches from leabench/zephyr/patches.yml
 pip install -r zephyr/scripts/requirements-base.txt -r zephyr/scripts/requirements-build-test.txt
 export ZEPHYR_BASE=$PWD/zephyr BSIM_OUT_PATH=$PWD/tools/bsim BSIM_COMPONENTS_PATH=$PWD/tools/bsim/components
 (cd tools/bsim && make everything -j$(nproc))
-ha-tool/scripts/build.sh && ha-tool/scripts/test.sh
+leabench/scripts/build.sh && leabench/scripts/test.sh
 ```
 
 `ZEPHYR_BASE` and `BSIM_*` must point at **this** workspace. If they point at another one, the
@@ -92,7 +95,7 @@ Zephyr patches (re-apply them after every `west update`: `west patch apply`, or
 |---|---|
 | `0001-central-connect-from-identity` | `bt_conn_le_create_set_id()`: without it Zephyr always connects as central from the default identity, so virtual devices could not have their own addresses and bonds. |
 | `0002-controller-bis-handle-range` | **Controller bug**: the BIS handle range was computed from the per-BIG limit instead of the pool of all BIGs; the 5th BIS of two BIGs hit an assertion. |
-| `0003-controller-adv-iso-pto-kconfig` | The controller added "pre-transmission" subevents to every BIG event on its own (almost 2× longer events). Now a Kconfig option; disabled in `ha_tool`, repetitions are set by the tester with `rtn=`. |
+| `0003-controller-adv-iso-pto-kconfig` | The controller added "pre-transmission" subevents to every BIG event on its own (almost 2× longer events). Now a Kconfig option; disabled in `leabench`, repetitions are set by the tester with `rtn=`. |
 | `0004-controller-big-create-prepare-per-big` | **Controller bug**: the "BIG create" switch was shared by all BIGs, so an event of a running BIG "ate" the creation of a new one and the 3rd BIG never started. |
 | `0005-pbp-announcement-no-null-memcpy` | `bt_pbp_get_announcement()` without metadata called `memcpy(dst, NULL, 0)`: undefined behaviour in C (found by UBSan in the `--sanitize` build). |
 | `0006-controller-adv-anchor-free-of-periodic` | **Controller bug**: a new BIG, PA train and AUX set were placed only after the *nearest* event of each role, so they could permanently land on a later event of a running role with a multiple interval: BIG on BIG (both lost every other event, 50% of frames), 60 ms PA on a 10 ms BIG (~17%), 70 ms AUX on a BIG (AUX never went out, the broadcast could not be found). Now every periodic role gets its own phase: a PA is accounted the way a synchronized receiver reserves it, PA trains and AUX sets with the same interval share one phase, and among free phases the one leaving the largest gap is chosen. |
@@ -100,7 +103,7 @@ Zephyr patches (re-apply them after every `west update`: `west patch apply`, or
 | `0008-shell-builtin-help-optional` | The Kconfig option `SHELL_HELP_CMD` disables the shell's built-in `help`, so that `help` can come from the protocol specification (`common/src/cli_tree.c`). |
 | `0009-shell-one-error-for-unknown-command` | A line with an unknown first word and more than `CONFIG_SHELL_ARGC_MAX` words got two errors ("command not found" and "too many arguments"), which shifted replies for clients. Now it gets one. |
 | `0010-vocs-client-drop-conn-on-disconnect` | **Host bug**: the volume controller reset itself on a disconnection, but the VOCS (balance) clients it discovered kept their reference to the connection. The connection object was never freed, so after a session with volume control `bonding disconnect X` + `bonding connect X` failed with `-EINVAL` until reboot. VOCS now drops it on disconnection, like AICS. |
-| `0011-vcp-vol-ctlr-retry-with-read-counter` | **Host bug**: after an "Invalid Change Counter" error the volume controller re-read the state but retried with the stale counter, so the retry failed too. It learns the counter only from notifications, so every volume command failed once the hearing aid's counter had moved: after any reconnection, or on a hearing aid whose volume had been changed before (the usual case with real hearing aids). |
+| `0011-vcp-vol-ctlr-retry-with-read-counter` | **Host bug**: after an "Invalid Change Counter" error the volume controller re-read the state but retried with the stale counter, so the retry failed too. It learns the counter only from notifications, so every volume command failed once the device's counter had moved: after any reconnection, or on a device whose volume had been changed before (the usual case with real devices). |
 | `0012-controller-big-create-release-streams-on-error` | **Controller bug**: LE Create BIG reserved the BIS streams before its last check (the event must fit the ISO interval next to the advertising slots) and did not return them when that check refused the BIG. Two refused 8-BIS BIGs used up the pool of 16, and every later BIG failed with Memory Capacity Exceeded until reset. |
 | `0013-controller-vs-read-schedule` | **New vendor command** `Read Schedule`: every running role as the controller's ticker has it (next event, period, reserved slot). `radio schedule` shows the real phases (proto human: a 60 ms timeline) and counts overlapping reservations, instead of the tool only modelling them. |
 
@@ -109,17 +112,17 @@ All of them are suitable for upstream submission.
 ## Build and test
 
 ```
-scripts/build.sh              # ha_tool + dut_sim for nrf5340bsim (host gcc, no Zephyr SDK)
+scripts/build.sh              # leabench + dut_sim for nrf5340bsim (host gcc, no Zephyr SDK)
 scripts/test.sh               # 122 tests in simulation, about 10 min (including the library tests)
 scripts/test.sh -m slow       # 11 long ones: fuzzing, soak, cycles, event storm, budget limit (about 12 min)
 scripts/test.sh -k phone      # selected tests
-HA_SIM_SPEED=2 scripts/test.sh   # simulation 2x faster than real time
+LEA_SIM_SPEED=2 scripts/test.sh   # simulation 2x faster than real time
 ```
 
 Airtime analysis (who transmitted when, why ISO events are lost):
 
 ```
-HA_PHY_ARGS=-dump_imm scripts/test.sh -k <test>   # full radio dumps in $BSIM_OUT_PATH/results/<sim_id>/
+LEA_PHY_ARGS=-dump_imm scripts/test.sh -k <test>   # full radio dumps in $BSIM_OUT_PATH/results/<sim_id>/
 scripts/airtime.py <sim_id> --from-ms 5000         # streams, intervals, occupancy, causes of CIS losses
 ```
 
@@ -128,7 +131,7 @@ Limits and memory (the numbers in "How many BIGs and BISes at once" and "On hard
 ```
 scripts/capacity.py accept       # which BIGs the controller itself creates, next to the model
 scripts/capacity.py broadcast    # each preset / RTN / PHY / encryption at the budget's edge and
-                                 # one BIS past it (--force), received by the hearing aid
+                                 # one BIS past it (--force), received by the device
 scripts/capacity.py multi        # several BIGs at their combined edge
 scripts/capacity.py unicast      # CIS loss next to 1-2 other links of 30-100 ms
 scripts/mem_report.sh <name> [hci_ipc_CONFIG_X=v ...]   # DK RAM / flash of a config variant
@@ -147,11 +150,11 @@ screen /dev/pts/7             # or any serial terminal / your own script
 
 ## Python and Java libraries
 
-Automation uses the libraries: `clients/python` (package `hatool`, pyserial) and
+Automation uses the libraries: `clients/python` (package `leabench`, pyserial) and
 `clients/java` (Java 17, jSerialComm). Details are in their READMEs. Both look the same:
 
 ```python
-with HaTool.open("/dev/ttyACM0") as tool:  # HaTool.find(), HaTool.tcp(...)
+with LeaBench.open("/dev/ttyACM0") as tool:  # LeaBench.find(), LeaBench.tcp(...)
     d = tool.bonding.create("Phone of José")
     tool.bonding.connect(d.id, address=addr)
     tool.wait_event("bonding_connected", id=d.id, timeout=20)
@@ -159,24 +162,24 @@ with HaTool.open("/dev/ttyACM0") as tool:  # HaTool.find(), HaTool.tcp(...)
 ```
 
 ```java
-try (HaTool tool = HaTool.openSerial("/dev/ttyACM0")) {
+try (LeaBench tool = LeaBench.openSerial("/dev/ttyACM0")) {
     Reply d = tool.bonding().create(new BondingCreateOptions().name("Phone of José"));
     tool.bonding().connect("Phone of José", new BondingConnectOptions().address(addr));
     tool.waitEvent("bonding_connected", Duration.ofSeconds(20), "id", d.getInt("id"));
 }
 ```
 
-- **Single source of truth:** `protocol/hatool.yaml` describes every command (line form,
+- **Single source of truth:** `protocol/leabench.yaml` describes every command (line form,
   arguments, keys, flags, types, ranges, reply fields) and every event. `tools/protogen/gen.py`
-  generates from it the firmware command table (`ha_tool/src/cli_table.c`), the methods of both
+  generates from it the firmware command table (`leabench/src/cli_table.c`), the methods of both
   libraries and `docs/protocol.md`. A command without a firmware handler does not link, and
   `gen.py --check` makes sure the generated files are up to date. To change a command: edit the
   YAML and run `tools/protogen/gen.py`.
 - **Library protocol:** JSON Lines (`proto json`), a common choice for devices driven over a
   serial line. The library enables it on connect and checks the protocol version.
-- **Without a board:** `scripts/sim.py --tcp 7000` exposes the simulated `ha_tool` on TCP 7000
-  (and the hearing aid on 7001), so Java and Python tests can be written and run without a DK.
-- **Several boards:** `HaTool.find(chip_id)` scans the SEGGER USB ports and recognizes the board
+- **Without a board:** `scripts/sim.py --tcp 7000` exposes the simulated `leabench` on TCP 7000
+  (and the device on 7001), so Java and Python tests can be written and run without a DK.
+- **Several boards:** `LeaBench.find(chip_id)` scans the SEGGER USB ports and recognizes the board
   by the `id` command.
 - **No local Java:** a JDK 17 can be unpacked without admin rights (e.g. Temurin into
   `~/.local/opt`). Gradle downloads itself through `./gradlew`.
@@ -213,7 +216,7 @@ separate channel: RTT on hardware, stdout in simulation.
 
 | Command | Description |
 |---|---|
-| `proto [text\|json\|human] [--verbose]` | Output format: `text` (default, `k=v`), `json` (JSON Lines for the libraries), `human` (echo, `ha> ` prompt, tables, BIG tree, hints on separate lines, layered `status` and `le-source status`, events as sentences with low-level ones such as MTU or per-direction stream events hidden; for terminal work). `--verbose` in `human` also prints the raw `EVT` lines. |
+| `proto [text\|json\|human] [--verbose]` | Output format: `text` (default, `k=v`), `json` (JSON Lines for the libraries), `human` (echo, `lea> ` prompt, tables, BIG tree, hints on separate lines, layered `status` and `le-source status`, events as sentences with low-level ones such as MTU or per-direction stream events hidden; for terminal work). `--verbose` in `human` also prints the raw `EVT` lines. |
 | `status [--verbose]` | Layered state: `mode`, attached identity, device, `connection`, `security`, `bond`, source state, number of active and configured BIGs; `--verbose` adds counters. |
 | `mode [unicast\|broadcast]` | Radio mode, see below. |
 | `stop` | Stops all radio activity of the current mode (connections or BIGs); the configuration stays. |
@@ -253,7 +256,7 @@ unique and cannot consist of digits only.
 | `bonding passkey <id> <n>`, `bonding confirm <id> yes\|no` | The phone user enters the passkey (after `bonding_passkey_request`) or confirms numeric comparison (after `bonding_confirm`). |
 | `bonding disconnect <id>`, `bonding unpair <id>`, `bonding delete <id>` | Disconnect (the bond stays); delete the keys **locally only**; delete the identity. |
 | `bonding bonds <id>`, `bonding io <id> <cap>` | Bonds of the identity; IO capabilities from the next connection on. |
-| `bonding param`, `bonding phy`, `bonding dle`, `bonding txpower`, `bonding policy` | Link parameters, TX power (distance simulation), answer to the hearing aid's parameter requests. |
+| `bonding param`, `bonding phy`, `bonding dle`, `bonding txpower`, `bonding policy` | Link parameters, TX power (distance simulation), answer to the device's parameter requests. |
 
 > **A bond is ready only after `EVT bonding_paired`.** `bonding_security` only means encryption
 > is on; key distribution takes a moment longer, and disconnecting in that window aborts bonding.
@@ -271,7 +274,7 @@ Commands only queue a request (`OK queued=1`); the result always comes as `EVT s
 | `le-source call accept`, `outgoing`, `remote_answer`, `end`, `hold`, `retrieve` | A call (bidirectional Conversational stream); `remote_answer` simulates the remote party answering. Music resumes after the call. |
 | `le-source alert [ms=1000] [freq=1500]` | Notification sound (Alerts). |
 | `le-source volume set <0..255>\|up\|down`, `le-source mute on\|off` | Device volume control (VCP). Result: `EVT source_volume`. |
-| `le-source preset list\|next\|prev\|set <n>` | Hearing aid presets (HAS). |
+| `le-source preset list\|next\|prev\|set <n>` | Device presets (HAS). |
 | `le-source mic mute on\|off`, `le-source mic gain <n>`, `le-source balance set <n>` | Microphone (MICP/AICS) and volume offset (VOCS). |
 | `le-source stop`, `le-source status` | Stop audio and calls; state with identity, device, connection, stream and reception statistics. |
 
@@ -281,7 +284,7 @@ Source events: `source_state from= to= cause=` (every state machine transition: 
 `source_error op= err= state=` (also a request not allowed in the current state, `err=-1`),
 `source_link_lost`. Music requested during a call is deferred and starts after it.
 
-### broadcast: Auracast builder
+### broadcast: BIG builder
 
 The BIG number (1–3) is always explicit: `broadcast 2 start`, with no selection command. BIG
 states: `draft` (incomplete), `ready` (at least one subgroup and one BIS), `active`, `stopped`
@@ -349,7 +352,7 @@ the same library as in `dut_sim`), and the firmware only copies ready frames.
 
 #### How many BIGs and BISes at once
 
-Controller memory limits (`ha_tool/netcore.conf`): 3 BIGs, 8 BIS per BIG, 16 in total. In
+Controller memory limits (`leabench/netcore.conf`): 3 BIGs, 8 BIS per BIG, 16 in total. In
 practice **airtime** decides. `broadcast <n> start` checks two things, in this order.
 
 **1. The controller's own event limit (one BIG).** LE Create BIG lays the whole BIG event out in
@@ -393,7 +396,7 @@ reserve = 1000 µs with one BIG, 3800 µs with two or more
 plus the controller's free BIGs and BISes.
 
 **Measured capacity of one BIG** (`scripts/capacity.py broadcast`: the budget's number of BISes
-is started and received for 4 s by the simulated hearing aid, which stays synchronized to the PA;
+is started and received for 4 s by the simulated device, which stays synchronized to the PA;
 one more BIS is started with `--force`). Every configuration the tool accepts was received
 without loss and found (190 cases, 0 losses). The table shows BISes for 2M / 1M PHY; where
 encryption costs one BIS, the encrypted number is in parentheses:
@@ -433,11 +436,11 @@ to 60 ms PA), so they drift against it.
 (`EVENT_OVERHEAD_START_US`). Measured without it (`scripts/capacity.py accept`), the controller's
 reserve per BIG event drops by about 0.8 ms (2830 → 2030 µs), usually one more BIS per BIG on 1M
 PHY and with 7.5 ms frames (48_6/1M 4 → 5, 48_5/2M 6 → 7). It stays enabled because `bonding phy
-<id> coded` tests a hearing aid's long-range link; a broadcast-only build can drop it
-(`CONFIG_BT_CTLR_PHY_CODED=n` in `ha_tool/netcore.conf`, then refit `CTLR_RESERVE_US`).
+<id> coded` tests a device's long-range link; a broadcast-only build can drop it
+(`CONFIG_BT_CTLR_PHY_CODED=n` in `leabench/netcore.conf`, then refit `CTLR_RESERVE_US`).
 
-**Unicast** (`scripts/capacity.py unicast`): the music stream (48_2) to one hearing aid lost no
-frame next to 1 or 2 other connections (to a second hearing aid) with intervals of 30, 50, 60 or
+**Unicast** (`scripts/capacity.py unicast`): the music stream (48_2) to one device lost no
+frame next to 1 or 2 other connections (to a second device) with intervals of 30, 50, 60 or
 100 ms. Losses come only with a broadcast running next to the CIS (see "Found in simulation"),
 which is why the tool works in modes.
 
@@ -473,18 +476,18 @@ broadcast 1 show                                       -> ... sdu=100 airtime_us
 broadcast 1 start
 ```
 
-### dut_sim (simulated hearing aid)
+### dut_sim (simulated device under test)
 
 | Command | Description |
 |---|---|
 | `version`, `addr`, `status` | `status` gives `conns`, `bonds`, `max_bonds` (4), `overwrite_oldest`, `streams`, `bcast`. |
 | `bonds`, `unpair all\|<addr>` | Bond list; "forget the phone". |
 | `adv on\|off`, `disconnect` | Advertising; disconnect everything. |
-| `io <cap>`, `passkey <n>`, `confirm yes\|no` | Pairing on the hearing aid side (`EVT dut_passkey`, `dut_passkey_request`, `dut_confirm`). |
-| `conn param [interval=ms] [latency=n] [sto=ms]` | The hearing aid requests other link parameters. |
+| `io <cap>`, `passkey <n>`, `confirm yes\|no` | Pairing on the device side (`EVT dut_passkey`, `dut_passkey_request`, `dut_confirm`). |
+| `conn param [interval=ms] [latency=n] [sto=ms]` | The device requests other link parameters. |
 | `call accept\|end\|hold\|retrieve [idx=]`, `call list` | Call "buttons" (CCP client). |
 | `media play\|pause\|next` | Media "buttons" (MCP client). |
-| `bcast scan [name=..] [code=..] [bis=1,3]`, `bcast stop`, `bcast status` | Auracast reception; `bis=` selects BISes, like a hearing aid choosing a channel or language. Up to 8 BIS, every sampling rate and both frame durations. |
+| `bcast scan [name=..] [code=..] [bis=1,3]`, `bcast stop`, `bcast status` | Auracast reception; `bis=` selects BISes, like a device choosing a channel or language. Up to 8 BIS, every sampling rate and both frame durations. |
 | `rssi` | RSSI of every link (`LINK peer= rssi=`). |
 
 `dut_sim` also has HAS (3 presets), MICP with AICS and VOCS servers (`EVT dut_preset`, `dut_mic`,
@@ -503,9 +506,9 @@ Key events:
 - `dut_bcast_error reason=code_required|...`,
 - `dut_bcast_stopped`.
 
-The hearing aid's bond list has 4 slots, and on overflow the oldest bond is dropped. A build with
+The device's bond list has 4 slots, and on overflow the oldest bond is dropped. A build with
 `-DCONFIG_BT_KEYS_OVERWRITE_OLDEST=n` makes it reject new bonds instead. Re-pairing a device the
-hearing aid already knows is refused (Zephyr's default behaviour).
+device already knows is refused (Zephyr's default behaviour).
 
 ### Example (a full scenario from a test)
 
@@ -514,8 +517,8 @@ hearing aid already knows is refused (Zephyr's default behaviour).
 OK mode=unicast
 > bonding create Phone
 OK id=1 name=Phone addr=FB:3A:AA:FA:FB:43/random io=none
-> bonding connect Phone bluetooth-name=DUT-HA
-OK id=1 state=connecting device=FC:79:2F:8A:62:3D/random device_name=DUT-HA
+> bonding connect Phone bluetooth-name=DUT-LEA
+OK id=1 state=connecting device=FC:79:2F:8A:62:3D/random device_name=DUT-LEA
 EVT t=3125 bonding_connected id=1 peer=FC:79:2F:8A:62:3D/random bonded=0
 > bonding pair Phone
 EVT t=4038 bonding_security id=1 level=2
@@ -529,7 +532,7 @@ EVT ... source_stream_open id=1 ctx=media preset=48_2 bidir=0 tone=440
 > le-source call incoming uri=tel:5551234 name=Mum
 EVT ... source_call idx=1 state=incoming by=local
 EVT ... source_stream_updated id=1 ctx=ringtone tone=800
-     (hearing aid: dut call accept)
+     (device: dut call accept)
 EVT ... source_call idx=1 state=active by=peer
 EVT ... source_stream_open id=1 ctx=conversational preset=16_2 bidir=1 tone=300
 ```
@@ -539,24 +542,24 @@ EVT ... source_stream_open id=1 ctx=conversational preset=16_2 bidir=1 tone=300
 | File | What it checks |
 |---|---|
 | `test_basic.py` | CLI, identities (slot reuse), broadcast lifecycle on the tool alone, unicast/broadcast modes (automatic entry, refusal, context cleared on switch). |
-| `test_persistence.py` | Restart of both boards: the tool starts empty (nothing was in flash), the hearing aid keeps an orphaned bond; the old identity without keys is rejected, a new one bonds normally. |
-| `test_privacy.py` | RPA on connection, resolution to the identity after bonding, a fresh RPA on every connection, two devices bonded with the same hearing aid are not confused. |
-| `test_pairing.py` | Passkey (correct, wrong), numeric comparison (yes, rejected on the hearing aid), level 3 requested from a hearing aid without IO. |
-| `test_connparams.py` | Parameters on connection, interval change, coded/2M PHY, data length, rejected and accepted parameter requests from the hearing aid. |
-| `test_hacontrol.py` | Preset list and change, microphone mute and gain, balance. |
-| `test_bonding.py` | Bond; filling the list, evicting the oldest (`key_missing`) and reconnecting the newest without pairing; "the phone forgot" (re-pairing refused until `unpair` on the hearing aid); parallel connections; fast connect–pair–disconnect cycles. |
-| `test_phone.py` | Music (48 kHz, 440 Hz at the hearing aid); a ringtone interrupting music, answering on the hearing aid, a bidirectional call and music resuming; rejecting on the hearing aid; an outgoing call and hold; pause/play from the hearing aid; an alert during music; volume and mute; volume after the hearing aid changed it and after a reconnection (patches 0010, 0011); music requested during an alert; state machine (transitions, refusing a disallowed request at once, deferred music). |
-| `test_broadcast.py` | Stereo L/R and a live tone change; encryption (no code, wrong code, right code); 48 kHz HQ; name filter; builder: 2 subgroups with languages and 3 BISes with their own parameters (the hearing aid checks the tone, sampling rate, octets and language of every BIS), selecting one BIS; 2 broadcasts at once (plain and encrypted); airtime limit and the `rtn=1` workaround; the budget covers all BIGs; builder validation. |
-| `test_lc3_table.py` | Each of the 16 BAP configurations (low and high tone and a live change, lossless); nearest tone selection, `exact=1`, ranges; level through `g_idx` (−2…−40 dBFS measured at the hearing aid ±1 dB); the highest level not clipped (8_1, 16_2, 48_2), 0 dBFS refused; a 7.5 ms BIG next to a 10 ms one (refusal, `--force`, warning). |
+| `test_persistence.py` | Restart of both boards: the tool starts empty (nothing was in flash), the device keeps an orphaned bond; the old identity without keys is rejected, a new one bonds normally. |
+| `test_privacy.py` | RPA on connection, resolution to the identity after bonding, a fresh RPA on every connection, two devices bonded with the same device are not confused. |
+| `test_pairing.py` | Passkey (correct, wrong), numeric comparison (yes, rejected on the device), level 3 requested from a device without IO. |
+| `test_connparams.py` | Parameters on connection, interval change, coded/2M PHY, data length, rejected and accepted parameter requests from the device. |
+| `test_remotectl.py` | Preset list and change, microphone mute and gain, balance. |
+| `test_bonding.py` | Bond; filling the list, evicting the oldest (`key_missing`) and reconnecting the newest without pairing; "the phone forgot" (re-pairing refused until `unpair` on the device); parallel connections; fast connect–pair–disconnect cycles. |
+| `test_phone.py` | Music (48 kHz, 440 Hz at the device); a ringtone interrupting music, answering on the device, a bidirectional call and music resuming; rejecting on the device; an outgoing call and hold; pause/play from the device; an alert during music; volume and mute; volume after the device changed it and after a reconnection (patches 0010, 0011); music requested during an alert; state machine (transitions, refusing a disallowed request at once, deferred music). |
+| `test_broadcast.py` | Stereo L/R and a live tone change; encryption (no code, wrong code, right code); 48 kHz HQ; name filter; builder: 2 subgroups with languages and 3 BISes with their own parameters (the device checks the tone, sampling rate, octets and language of every BIS), selecting one BIS; 2 broadcasts at once (plain and encrypted); airtime limit and the `rtn=1` workaround; the budget covers all BIGs; builder validation. |
+| `test_lc3_table.py` | Each of the 16 BAP configurations (low and high tone and a live change, lossless); nearest tone selection, `exact=1`, ranges; level through `g_idx` (−2…−40 dBFS measured at the device ±1 dB); the highest level not clipped (8_1, 16_2, 48_2), 0 dBFS refused; a 7.5 ms BIG next to a 10 ms one (refusal, `--force`, warning). |
 | `test_capacity.py` | 11 BISes at once (8 plain + 3 encrypted) lossless and refusing one more BIG; 3 plain/encrypted BIGs with different codes and rejecting another BIG's code (MIC); encryption cost in the budget; budget limit (8 + 4 and 3 + 3 + 3 rejected); (slow) every configuration at the budget limit lossless at a receiver holding the PA. |
 | `test_proto.py` | Firmware keys = specification, unknown keys refused, JSON Lines (values with quotes and non-ASCII characters), `human` mode, `limits`/`id`/`time`, event filter, help, hints, a single shell error. |
-| `test_clients.py` | Python library over pty and TCP (device, pairing, errors, events, a broadcast heard by the hearing aid); Java library: `./gradlew test` with a test against the simulation over TCP (skipped without a JDK). |
-| `test_txpower.py` | `bonding txpower` lowers the RSSI at the hearing aid by ~20 dB; `broadcast <n> txpower` (before start and live), broadcast RSSI at the hearing aid. |
+| `test_clients.py` | Python library over pty and TCP (device, pairing, errors, events, a broadcast heard by the device); Java library: `./gradlew test` with a test against the simulation over TCP (skipped without a JDK). |
+| `test_txpower.py` | `bonding txpower` lowers the RSSI at the device by ~20 dB; `broadcast <n> txpower` (before start and live), broadcast RSSI at the device. |
 | `test_output_limits.py` | The longest real lines fit without truncation; a line that is too long is cut at a word boundary and marked (`truncated=1`, in JSON `"truncated":true`, always valid JSON); counters in `cli stats`. |
 | `test_config.py` | Consistency between the application and the controller image (separate builds, so `BUILD_ASSERT` is not enough): broadcast limits, ISO buffers, SDU size. No simulation. |
-| `test_fuzz.py` (slow) | CLI fuzzing from the `protocol/hatool.yaml` grammar: exactly one reply per line, every JSON line parses, no assertions and no `fatal`, a consistent `status` at the end and zero truncated lines. |
+| `test_fuzz.py` (slow) | CLI fuzzing from the `protocol/leabench.yaml` grammar: exactly one reply per line, every JSON line parses, no assertions and no `fatal`, a consistent `status` at the end and zero truncated lines. |
 | `test_soak.py` (slow) | Soak of 2 BIGs (9 BIS) with tone changes every second (zero loss, steady `sent` rate); 200× broadcast start/stop and 100× connect–pair–disconnect–delete without leaks; event storms with exact loss accounting. |
-| `test_ux.py` | Acceptance criteria from `docs/broadcast-ux.md`: identities by name, connecting by Bluetooth name (also two hearing aids with the same name), the unicast session from the document, layered `status`, `stop`, errors with hints, `reset --yes`; two independent BIGs without a selection command, BIG states, changing and deleting subgroups / BISes, `--all` with a result per BIG (counts, every failure named), `human` views, empty lists, status and events as sentences; hints for a swapped word order, `help` without the BIG number, authenticated pairing without IO, unique default names. |
+| `test_ux.py` | Acceptance criteria from `docs/broadcast-ux.md`: identities by name, connecting by Bluetooth name (also two devices with the same name), the unicast session from the document, layered `status`, `stop`, errors with hints, `reset --yes`; two independent BIGs without a selection command, BIG states, changing and deleting subgroups / BISes, `--all` with a result per BIG (counts, every failure named), `human` views, empty lists, status and events as sentences; hints for a swapped word order, `help` without the BIG number, authenticated pairing without IO, unique default names. |
 
 ## On hardware (nRF5340 DK)
 
@@ -567,7 +570,7 @@ Memory usage (`scripts/build.sh dk`):
 
 | Core | Flash | RAM |
 |---|---|---|
-| app (`ha_tool`) | 585 KB / 1 MB (57%), including 257 KB of frame table | 114 KB / 448 KB (25%) |
+| app (`leabench`) | 585 KB / 1 MB (57%), including 257 KB of frame table | 114 KB / 448 KB (25%) |
 | net (`hci_ipc` controller) | 164 KB / 256 KB (64%) | 49 KB / 64 KB (76%) |
 
 Hardware optimizations:
@@ -575,7 +578,7 @@ Hardware optimizations:
   `nvs_`/`settings_save`/`flash_write`). Automated test loops cannot wear out the flash.
 - **No LC3 encoder and no FPU:** −50 KB RAM (encoder memory) and a constant, minimal CPU cost
   per SDU.
-- **Own controller** (`ha_tool/netcore.conf` instead of the sample configuration with every
+- **Own controller** (`leabench/netcore.conf` instead of the sample configuration with every
   role): no peripheral, BIG reception, PA sync, PAST, DTM or large scan buffers. Net core RAM went
   from 98% to 92% with 3 BIGs / 16 BIS instead of 2 / 6, then to 76% (table below).
 - **App core at 128 MHz** (`src/board.c`; the MDK boots at 64 MHz).
@@ -587,7 +590,7 @@ Hardware optimizations:
 Net core RAM went from 59 KB (92%) to 49 KB (76%) without giving up a limit
 (`scripts/mem_report.sh` variants, each one run through the whole test suite):
 
-| Change in `ha_tool/netcore.conf` | RAM saved | Why it is enough |
+| Change in `leabench/netcore.conf` | RAM saved | Why it is enough |
 |---|---|---|
 | advertising / AUX / periodic sets 4 → 3 | 2.4 KB | one set per BIG; a BIG's set is deleted before it starts again |
 | ISO TX buffers 20 → 17 (+ host count on both cores) | 1.8 KB | 16 BIS with 1 SDU in flight each + spare; `audio_tx.c` gives 2 in flight only while they fit |
@@ -597,17 +600,17 @@ Net core RAM went from 59 KB (92%) to 49 KB (76%) without giving up a limit
 
 Price list for raising a limit again: about 0.8 KB per BIG (its three advertising sets), 0.6 KB
 per ISO TX buffer (one per BIS), 0.6 KB per HCI event buffer. Coded PHY stays (0.4 KB) because
-`bonding phy` offers it. Every increase of the limits in `ha_tool/netcore.conf` must be checked
+`bonding phy` offers it. Every increase of the limits in `leabench/netcore.conf` must be checked
 with a DK build (the simulation does not check net core RAM).
 
 1. Zephyr SDK (ARM toolchain), `nrfutil` / J-Link.
-2. `scripts/build.sh dk`. Builds `ha_tool` for `nrf5340dk/nrf5340/cpuapp` together with the
+2. `scripts/build.sh dk`. Builds `leabench` for `nrf5340dk/nrf5340/cpuapp` together with the
    controller image (`hci_ipc`) for the net core.
-3. `west flash -d build/ha_tool_dk`.
+3. `west flash -d build/leabench_dk`.
 4. CLI on the DK's first VCOM (**1000000** baud), logs over RTT.
 5. Single commands: `scripts/cli.py --port /dev/ttyACM0 version "bonding list"`.
    Tests of the tool alone on the board: `scripts/test.sh --hw-port /dev/ttyACM0` (tests that
-   need the simulated hearing aid are skipped).
+   need the simulated device are skipped).
 
 Notes:
 - **The same code** runs in simulation and on the board. In simulation the controller is the
@@ -620,29 +623,29 @@ Notes:
 - The simulation does not model range or interference; the airtime budget is worth confirming on
   the board (same controller code, so it should carry over).
 - Identities, IRKs, bonds and the names and IO of virtual devices are **RAM only**. After a board
-  reset the list is empty and the hearing aid has orphaned bonds (the realistic "phone restored
+  reset the list is empty and the device has orphaned bonds (the realistic "phone restored
   to factory settings" case).
 - Privacy (RPA) is global. Fixed addresses (e.g. for a sniffer): build with
   `-DCONFIG_BT_PRIVACY=n`. Legacy-only pairing is just a build option in Zephyr
   (`CONFIG_BT_SMP_LEGACY_PAIR_ONLY`), with no CLI switch.
 
-## Found in simulation (worth knowing with real hearing aids)
+## Found in simulation (worth knowing with real devices)
 
 - Stopping and restarting a running advertising set right after a disconnection hung the
   simulated controller. The workaround is in `dut_sim`.
 - Zephyr's MCC client handles one connection at a time. Parallel CCP/MCP discovery on several
   links ends with `-ENOMEM`, so `dut_sim` does them sequentially.
 - An incoming call that started before the CCP subscription has to be read after discovery. A
-  good test case for real hearing aids.
+  good test case for real devices.
 - **A sink's own advertising vs. PA sync:** in the Zephyr controller the AUX event of a sink's own
   connectable advertising preempts the receive window of a periodic advertising sync being
   established. With BAP default intervals (advertising 20–30 ms, PA 60 ms) the phase can stay
-  bad and the sync fails every time (`0x3e`). Worth checking on real hearing aids that
+  bad and the sync fails every time (`0x3e`). Worth checking on real devices that
   advertise while looking for a broadcast.
 - **Several subgroups in the BASE:** a broadcast sink in Zephyr's default configuration
   (1 subgroup) **silently ignores** a BASE with more subgroups: BIGInfo arrives, the BASE does
-  not. Worth checking how real hearing aids react to a multilingual broadcast.
-- **CIS next to a broadcast in `ha_tool`** (Zephyr LL controller, measured on radio dumps with
+  not. Worth checking how real devices react to a multilingual broadcast.
+- **CIS next to a broadcast in `leabench`** (Zephyr LL controller, measured on radio dumps with
   `scripts/airtime.py`):
   - The BIG itself does not collide with the CIS. The CIS loses events when the **slot
     reservation** of another periodic activity overlaps the CIS reservation. The controller
@@ -664,18 +667,18 @@ Notes:
 
     The number of BISes does not decide; the phase does. An earlier conclusion that the loss grows
     with the number of BISes was wrong.
-  - A BIG started during a call collides even more, and with a running 3-BIS BIG `ha_tool` does
-    not establish new connections (the initiator gets no slots for the hearing aid's AUX
+  - A BIG started during a call collides even more, and with a running 3-BIS BIG `leabench` does
+    not establish new connections (the initiator gets no slots for the device's AUX
     advertising channel).
   - **That is why the tool works in modes** (one function at a time). The measurements stay as
     the rationale and a reference point, should functions ever need to be combined, e.g. on SDC.
   - On a board with upstream Zephyr the same controller code runs, so these results should carry
     over. With the SoftDevice Controller (NCS) the scheduler is different and this has to be
     measured again.
-- **Receiving CIS and BIG at once** does not work in `dut_sim` either (controller). Real hearing
-  aids switch between sources anyway.
+- **Receiving CIS and BIG at once** does not work in `dut_sim` either (controller). Real
+  devices switch between sources anyway.
 - **Several BIGs at once** (Zephyr LL controller): two controller bugs (patches 0002, 0004) and
-  the start order. `ha_tool` started a BIG before its periodic advertising, so one broadcast's PA
+  the start order. `leabench` started a BIG before its periodic advertising, so one broadcast's PA
   landed on another BIG's events and took one event per PA interval from it (60 ms: 17% loss).
   Now the PA starts first, and the new BIG is placed after it.
 - **With 16 streams** the host kept 2 SDUs in flight per stream, more than the controller has
@@ -688,12 +691,12 @@ cannot see. Every defect found has a regression test and its own fix.
 
 | Tool | How to run | Result |
 |---|---|---|
-| ASan + UBSan in simulation | `scripts/build.sh sim --sanitize`, `HA_VARIANT=asan scripts/test.sh -m "slow or not slow"` | 130 tests (including the long ones): zero ASan/UBSan reports, all pass |
+| ASan + UBSan in simulation | `scripts/build.sh sim --sanitize`, `LEA_VARIANT=asan scripts/test.sh -m "slow or not slow"` | 130 tests (including the long ones): zero ASan/UBSan reports, all pass |
 | Static analysis | `scripts/analyze.sh` (`gcc -fanalyzer`, `clang-tidy`, `.clang-tidy`) | 36 files, clean |
-| CLI fuzzing | `scripts/test.sh -m slow test_fuzz.py` (`HA_FUZZ_SEED`, `HA_FUZZ_LINES`) | 3 seeds × 2500 lines (text and JSON alternating) + a run on ASan: no invariant violations |
-| Specification conformance | automatically in every run (`tests/out/conformance.txt`) | every OK reply and every `ha_tool` event matches `protocol/hatool.yaml` |
-| Coverage | `scripts/build.sh sim --coverage`, `HA_VARIANT=cov scripts/test.sh -m "slow or not slow"`, `gcovr` → `build/coverage/` | `ha_tool` + `common`: 90.1% lines, 97.3% functions, 74.6% branches; 131 of 131 tests pass |
-| Soak, cycles, event storm | `scripts/test.sh -m slow test_soak.py` (`HA_SOAK_S`, `HA_CYCLES`) | 300 s soak (9 BIS, a tone every second): zero loss; 200 + 100 cycles without leaks; storms of 16–1000 events counted exactly |
+| CLI fuzzing | `scripts/test.sh -m slow test_fuzz.py` (`LEA_FUZZ_SEED`, `LEA_FUZZ_LINES`) | 3 seeds × 2500 lines (text and JSON alternating) + a run on ASan: no invariant violations |
+| Specification conformance | automatically in every run (`tests/out/conformance.txt`) | every OK reply and every `leabench` event matches `protocol/leabench.yaml` |
+| Coverage | `scripts/build.sh sim --coverage`, `LEA_VARIANT=cov scripts/test.sh -m "slow or not slow"`, `gcovr` → `build/coverage/` | `leabench` + `common`: 90.1% lines, 97.3% functions, 74.6% branches; 131 of 131 tests pass |
+| Soak, cycles, event storm | `scripts/test.sh -m slow test_soak.py` (`LEA_SOAK_S`, `LEA_CYCLES`) | 300 s soak (9 BIS, a tone every second): zero loss; 200 + 100 cycles without leaks; storms of 16–1000 events counted exactly |
 | Libraries without a board | `pytest clients/python/tests`, `./gradlew test` (in `scripts/lint.sh`) | 19 + 16 tests against a fake board |
 
 Found and fixed:
@@ -702,26 +705,26 @@ Found and fixed:
 |---|---|---|
 | The controller placed a new BIG on a running one (patch 0006) | ASan changed the timing and hit the bad phase | both BIGs lost 50% of frames, depending on the start moment (also on the DK) |
 | The controller placed a PA train and AUX set on a running BIG, and a receiver holding the PA could not keep up (patch 0006, extended) | final ASan run: `test_started_big_never_overlaps_running_one` and `test_most_bises`; radio dumps (`scripts/airtime.py`) | a BIG lost 8–17% of frames or the broadcast could not be found, depending on the start moment; the old budget only masked it |
-| The simulated hearing aid's own advertising preempted its PA sync (`dut_sim`) | a flaky `test_broadcast_txpower` (1 failure in the coverage run, PA sync retries in 2 of 10 runs); radio dumps: the sink synced to every PA packet and aborted it 45 µs later, each time its own AUX_ADV_IND followed 846 µs after the PA | its advertising interval (30 ms) divides the PA interval (60 ms), so on an unlucky start the phase never moved and the sync failed (`0x3e`); test double only: it now pauses advertising while establishing the sync, 0 retries in 30 runs |
-| The simulated hearing aid leaked its broadcast sink on `bcast stop` (`dut_sim`) | a warning while debugging the above (`Failed to add sync as Receive State: -12`) | stopping a synced BIG is asynchronous, so the immediate delete failed and the BASS receive state stayed taken; now deleted after the `stopped` callback |
+| The simulated device's own advertising preempted its PA sync (`dut_sim`) | a flaky `test_broadcast_txpower` (1 failure in the coverage run, PA sync retries in 2 of 10 runs); radio dumps: the sink synced to every PA packet and aborted it 45 µs later, each time its own AUX_ADV_IND followed 846 µs after the PA | its advertising interval (30 ms) divides the PA interval (60 ms), so on an unlucky start the phase never moved and the sync failed (`0x3e`); test double only: it now pauses advertising while establishing the sync, 0 retries in 30 runs |
+| The simulated device leaked its broadcast sink on `bcast stop` (`dut_sim`) | a warning while debugging the above (`Failed to add sync as Receive State: -12`) | stopping a synced BIG is asynchronous, so the immediate delete failed and the BASS receive state stayed taken; now deleted after the `stopped` callback |
 | Ringtone / beep pattern after 71 minutes of streaming | review | `frame_count * frame_us` overflowed 32 bits and the on/off timing jumped |
 | 48_6 (155 B SDUs) went out as 2 PDUs per SDU | `scripts/capacity.py accept`: 48_6 stopped at 4 BISes | the controller's BIS PDU is limited by `ISO_TX_BUFFER_SIZE` − 8 B timestamp header = 152 B, so every SDU was split (BN=2): twice the air time. Buffers are now 163 B |
 | The controller silently lowered RTN; past its event limit it refused the BIG, which the budget did not know | acceptance matrix: BIGs "accepted" with 12–33 ms of air in a 10 ms interval; `ERR -22` for 48_6 with 7 BIS the budget allowed | the tool now models the controller's limit, refuses with the largest RTN that fits, and reads the real layout back (`broadcast_warning reason=layout`) |
 | Two refused BIGs left broadcast unusable until reset (patch 0012) | acceptance matrix: after two refusals every BIG got `ERR -5` (Memory Capacity Exceeded) | BIS streams of a refused LE Create BIG were never returned |
-| The simulated hearing aid sometimes never synchronized to a PA (`dut_sim`) | capacity matrix: one 7.5 ms encrypted BIG "not found" every run | it stopped scanning before the PA sync was established; it now scans until then |
+| The simulated device sometimes never synchronized to a PA (`dut_sim`) | capacity matrix: one 7.5 ms encrypted BIG "not found" every run | it stopped scanning before the PA sync was established; it now scans until then |
 | `broadcast budget` promised one BIS more than `start` accepted | capacity matrix | its probe BIG had no name or PBP, so the controller limit was computed with too little advertising data |
-| Reconnecting the same identity failed with `ERR -22 connect failed` until reboot (patch 0010) | UX walk on the simulation (`mode broadcast`, `reset`, then the same flow again); narrowed down to any disconnection after volume control, visible when the identity id is reused | a tester could not reconnect a hearing aid after a session with volume control |
-| Volume control failed after any reconnection (patch 0011) | the new reconnection test; `source_error op=vol_set err=128` (Invalid Change Counter) once VCP write errors were reported at all | `le-source volume` silently did nothing on hearing aids whose volume had changed; VCP write errors are now reported as `source_error` |
+| Reconnecting the same identity failed with `ERR -22 connect failed` until reboot (patch 0010) | UX walk on the simulation (`mode broadcast`, `reset`, then the same flow again); narrowed down to any disconnection after volume control, visible when the identity id is reused | a tester could not reconnect a device after a session with volume control |
+| Volume control failed after any reconnection (patch 0011) | the new reconnection test; `source_error op=vol_set err=128` (Invalid Change Counter) once VCP write errors were reported at all | `le-source volume` silently did nothing on devices whose volume had changed; VCP write errors are now reported as `source_error` |
 | A music start during an alert was dropped | code review | `le-source music start` while an alert played from idle answered `deferred`, then never played |
 | The unicast group and the broadcast source were forgotten when their delete failed | code review | after a slow stop (link loss, busy controller) every later stream or BIG start failed until reboot |
 | The BIG start timeout and shell commands ran `big_stop()` at the same time | code review | a double delete of the same source and advertising set when a timeout met `broadcast stop` / `delete` / `reset` |
-| A call dialled by the hearing aid during an alert or another call stayed alerting | code review | GTBS created it, the phone refused it, nobody ended it |
+| A call dialled by the device during an alert or another call stayed alerting | code review | GTBS created it, the phone refused it, nobody ended it |
 | `bonding pair sec=3/4` with `io=none` said only "set security failed" | UX walk | now: authenticated pairing needs an IO capability, with the commands to run |
 | `broadcast stop --all` counted inactive BIGs as stopped; a partial failure named only the first failed BIG | UX walk | `stopped=3` for one running BIG; "BIG 2 failed" when 2 and 3 failed |
 | Two shell errors for one line (patch 0009) | fuzzer after the CLI change (`"bcast " * 60` stopped being a known command) | client replies shifted by one command |
 | `le-source status` printed `preset=(null)` when idle | fuzzer | a value outside the specification |
 | `next_big_bis` ignored the limit of 3 BIGs and 16 BIS | the new budget (with 3 BIGs airtime was left over) | `broadcast budget` promised BISes that could not be started |
-| The hearing aid (`dut_sim`) reported CCP discovery before it stored the server | final run (`test_call_from_hearing_aid`, 1 in 3) | `call dial` right after `dut_ccp_discovered` gave `ERR -107`; test double only |
+| The device (`dut_sim`) reported CCP discovery before it stored the server | final run (`test_call_from_device`, 1 in 3) | `call dial` right after `dut_ccp_discovered` gave `ERR -107`; test double only |
 | Deleting the newest device blocked creating new ones | connection cycles | after one deletion no device could be created |
 | Device PHY command: a pointer to a compound literal past its scope | ASan | undefined behaviour (worked by accident on the DK) |
 | The shell silently dropped non-ASCII characters (patch 0007) | fuzzer | `name=Zażółć` gave "Za"; a line of only such characters got no reply |
@@ -739,7 +742,7 @@ Found and fixed:
 Final result: 3 × the full suite (120 tests) green, ASan with the long tests (130) green,
 coverage with the long tests (131) green, `scripts/analyze.sh` and `scripts/lint.sh` (with the
 Java client) clean, DK build without warnings: application 584 KB flash / 114 KB static RAM, net
-core 164 KB / 59 KB. The former flaky `test_broadcast_txpower` (the simulated hearing aid's own
+core 164 KB / 59 KB. The former flaky `test_broadcast_txpower` (the simulated device's own
 advertising, see the table) passed in every run.
 
 Optimization: the event queue was the largest object in RAM (11.9 KB: 32 slots sized for the
@@ -758,11 +761,11 @@ variant.
 
 ## Next steps
 
-- First run on the DK and with real hearing aids; confirming the airtime budget on a real radio.
+- First run on the DK and with real devices; confirming the airtime budget on a real radio.
 - A denser frame table grid on the external QSPI flash (8 MB on the DK, written only when
   programming).
 - Submitting the Zephyr patches upstream.
-- Broadcast Assistant (BASS): the DK tells the hearing aid to join an Auracast.
+- Broadcast Assistant (BASS): the DK tells the device to join an Auracast.
 - ASHA (Android) as a second phone simulation variant.
 - From the architecture review, deferred:
   - a request id (`req=`) in replies (today replies come strictly in order, so the libraries
@@ -772,7 +775,7 @@ variant.
 
 ## License
 
-The project code (the `ha_tool` firmware, `dut_sim`, `common`, the client libraries, tools,
+The project code (the `leabench` firmware, `dut_sim`, `common`, the client libraries, tools,
 scripts and tests) is licensed under the [Mozilla Public License 2.0](LICENSE).
 
 Exceptions: the Zephyr patches in `zephyr/patches/` modify Zephyr code and stay under its

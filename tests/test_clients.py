@@ -11,22 +11,22 @@ import subprocess
 
 import pytest
 
-from hatool import HaTool, HaToolError
 from helpers import OUT, ROOT, near
+from leabench import LeaBench, LeaBenchError
 from simlib import Device, Sim, TcpBridge
 
 
 @pytest.fixture
 def board(request):
-    """ha_tool for the client under test (pty free), dut_sim through simlib."""
+    """leabench for the client under test (pty free), dut_sim through simlib."""
     out = OUT / request.node.name.replace("[", "_").replace("]", "_")
     sim = Sim(out)
-    sim.start([("ha_tool", "ha_tool"), ("dut", "dut_sim")], attach=False)
+    sim.start([("leabench", "leabench"), ("dut", "dut_sim")], attach=False)
     ptys = dict(sim.ptys)
     dut = Device("dut", ptys["dut"], out / "dut.log", app="dut_sim")
     dut.sync()
     sim.devices.append(dut)
-    yield sim, ptys["ha_tool"], dut
+    yield sim, ptys["leabench"], dut
     sim.stop()
 
 
@@ -43,10 +43,10 @@ def test_python_client(board, transport, client_log):
     _sim, pty, dut = board
     bridge = None
     if transport == "pty":
-        tool = HaTool.open(pty, log=client_log)
+        tool = LeaBench.open(pty, log=client_log)
     else:
         bridge = TcpBridge(pty, 0)
-        tool = HaTool.tcp("127.0.0.1", bridge.port, log=client_log)
+        tool = LeaBench.tcp("127.0.0.1", bridge.port, log=client_log)
     try:
         assert tool.version().proto == 1
         assert tool.limits().bigs == 3
@@ -65,10 +65,10 @@ def test_python_client(board, transport, client_log):
         assert rows[0]["name"] == "Zoë phone" and rows[0]["bonds"] == 1
 
         # Errors: unknown key on the board, bad enum and unknown argument in the client
-        with pytest.raises(HaToolError) as e:
+        with pytest.raises(LeaBenchError) as e:
             tool.raw("bonding create frq=1")
         assert e.value.errno == -22 and e.value.fields["key"] == "frq"
-        with pytest.raises(HaToolError) as e:
+        with pytest.raises(LeaBenchError) as e:
             tool.raw("nosuchcommand")
         assert e.value.errno == -22
         with pytest.raises(ValueError):
@@ -81,7 +81,7 @@ def test_python_client(board, transport, client_log):
         assert tool.evt.list().off == "mode"
         tool.evt.on()
 
-        # Broadcast with a spaced name; the hearing aid hears the tone
+        # Broadcast with a spaced name; the device hears the tone
         tool.mode("broadcast")
         tool.broadcast.create(1, name="Conference hall", preset="24_2", bis=1)
         tone = tool.broadcast.bis.tone(1, 1, freq=1013, level=-20)
@@ -117,8 +117,8 @@ def test_java_client(request):
     out = OUT / request.node.name
     sim = Sim(out)
     try:
-        sim.start([("ha_tool", "ha_tool")], attach=False)
-        bridge = TcpBridge(dict(sim.ptys)["ha_tool"], 0)
+        sim.start([("leabench", "leabench")], attach=False)
+        bridge = TcpBridge(dict(sim.ptys)["leabench"], 0)
         env = dict(os.environ, JAVA_HOME=home, HATOOL_TCP=f"127.0.0.1:{bridge.port}")
         res = subprocess.run(
             ["./gradlew", "test", "--rerun-tasks", "-q", "--console=plain"],
@@ -130,7 +130,7 @@ def test_java_client(request):
         )
         (out / "gradle.log").write_text(res.stdout + res.stderr)
         assert res.returncode == 0, res.stdout[-3000:] + res.stderr[-3000:]
-        report = ROOT / "clients/java/build/test-results/test/TEST-io.hatool.SimulationTest.xml"
+        report = ROOT / "clients/java/build/test-results/test/TEST-io.leabench.SimulationTest.xml"
         head = report.read_text().split(">", 2)[1]
         assert 'tests="1"' in head and 'skipped="0"' in head and 'failures="0"' in head, head
         bridge.close()

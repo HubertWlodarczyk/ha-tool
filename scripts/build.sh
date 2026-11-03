@@ -2,15 +2,15 @@
 # Copyright (c) 2026 Hubert Włodarczyk
 # SPDX-License-Identifier: MPL-2.0
 
-# Builds ha_tool and dut_sim.
+# Builds leabench and dut_sim.
 #   scripts/build.sh            simulation (nrf5340bsim), output in build/<app>
 #   scripts/build.sh dk         nRF5340 DK (needs the Zephyr SDK), output in build/<app>_dk
 #   scripts/build.sh sim -p     pristine rebuild
 #   scripts/build.sh sim --sanitize   ASan + UBSan, output in build/<app>_asan
 #   scripts/build.sh sim --coverage   gcov, output in build/<app>_cov
-#   scripts/build.sh dk --diag        stack measurement shell commands (ha_tool/diag.conf),
+#   scripts/build.sh dk --diag        stack measurement shell commands (leabench/diag.conf),
 #                                     output in build/<app>_dk_diag
-# Tests use a variant with HA_VARIANT=asan|cov scripts/test.sh
+# Tests use a variant with LEA_VARIANT=asan|cov scripts/test.sh
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -38,7 +38,7 @@ if [ "$VARIANT" = _asan ] || [ "$VARIANT" = _cov ]; then
   [ "$TARGET" = sim ] || { echo "--sanitize / --coverage: simulation only"; exit 1; }
 fi
 
-APPS=(ha_tool)
+APPS=(leabench)
 [ "$TARGET" = sim ] && APPS+=(dut_sim)
 
 for app in "${APPS[@]}"; do

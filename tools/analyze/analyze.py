@@ -24,8 +24,8 @@ import subprocess
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-BUILDS = ("ha_tool", "dut_sim")
-OWN = ("ha_tool/src/", "dut_sim/src/", "common/src/")
+BUILDS = ("leabench", "dut_sim")
+OWN = ("leabench/src/", "dut_sim/src/", "common/src/")
 # GCC options clang does not know (clang-tidy parses with clang)
 GCC_ONLY = re.compile(
     r"^-(fno-reorder-functions|fno-defer-pop|fno-freestanding|fno-printf-return-value|"

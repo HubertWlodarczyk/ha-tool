@@ -7,7 +7,7 @@ from simlib import CliError
 
 
 def test_tool_cli(tool):
-    assert tool.cmd("version")["app"] == "ha_tool"
+    assert tool.cmd("version")["app"] == "leabench"
     st = tool.cmd("status")
     assert st["mode"] == "none" and st["identity"] == "none" and st["source"] == "idle"
     assert st["broadcasts_active"] == "0" and st["broadcasts_configured"] == "0"

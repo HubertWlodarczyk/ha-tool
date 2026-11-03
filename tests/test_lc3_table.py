@@ -1,9 +1,9 @@
 # Copyright (c) 2026 Hubert Włodarczyk
 # SPDX-License-Identifier: MPL-2.0
 
-"""Precomputed LC3 frame table (ha_tool/src/lc3_frames.c): every BAP configuration (7.5 / 10 ms,
+"""Precomputed LC3 frame table (leabench/src/lc3_frames.c): every BAP configuration (7.5 / 10 ms,
 8..48 kHz incl. 44.1), tone selection on the table's grid, and the level set by rewriting the
-global gain field. The simulated hearing aid decodes and measures each stream."""
+global gain field. The simulated device decodes and measures each stream."""
 
 import pytest
 
@@ -120,7 +120,7 @@ def test_level_by_global_gain(pair):
 @pytest.mark.parametrize(("cfg", "freq"), [("8_1", 133), ("16_2", 1000), ("48_2", 2000)])
 def test_highest_level_is_not_clipped(pair, cfg, freq):
     """At the lower bitrates the decoder overshoots a full scale sine and clips it (heard as
-    distortion), so the highest level is -2 dBFS: decoded at the hearing aid without a single
+    distortion), so the highest level is -2 dBFS: decoded at the device without a single
     sample at full scale, also for the table's worst tone (8_1, 133 Hz). 0 dBFS is refused."""
     ha, dut = pair
     ha.cmd(f"broadcast 1 create name=Max preset={cfg} bis=1")

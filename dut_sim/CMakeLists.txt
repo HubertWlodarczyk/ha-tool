@@ -12,7 +12,7 @@ target_sources(app PRIVATE
   src/audio_rx.c
   src/unicast.c
   src/ctrl.c
-  src/ha_services.c
+  src/audio_services.c
   src/bsink.c
   ../common/src/cli_out.c
   ../common/src/cli_evt.c

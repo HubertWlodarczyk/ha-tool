@@ -1,7 +1,7 @@
 # Copyright (c) 2026 Hubert Włodarczyk
 # SPDX-License-Identifier: MPL-2.0
 
-"""Python client: protocol tables and one method per command (clients/python/hatool)."""
+"""Python client: protocol tables and one method per command (clients/python/leabench)."""
 
 from __future__ import annotations
 

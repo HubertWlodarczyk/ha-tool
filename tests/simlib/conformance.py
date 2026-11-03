@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MPL-2.0
 
 """Protocol conformance over the whole test session: every OK reply (with its data lines) and
-every event of ha_tool seen by any test is checked against protocol/hatool.yaml.
+every event of leabench seen by any test is checked against protocol/leabench.yaml.
 
 Errors: names or fields missing from the spec, spec fields missing from a reply or event,
 values that do not parse as their spec type. Also reported (not an error): commands and
@@ -18,7 +18,7 @@ from collections import defaultdict
 import yaml
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-SPEC = yaml.safe_load((ROOT / "protocol/hatool.yaml").read_text())
+SPEC = yaml.safe_load((ROOT / "protocol/leabench.yaml").read_text())
 COMMANDS = {c["cmd"]: c for c in SPEC["commands"]}
 EVENTS: dict[str, dict] = SPEC.get("events", {})
 SAMPLES = 40  # kept per command / event (enough to see every variant, bounded memory)

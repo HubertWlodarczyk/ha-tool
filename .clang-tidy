@@ -29,4 +29,4 @@ Checks: >
 #   optin.core.EnumCastOutOfRange  Zephyr uses enums as bit masks (bt_audio_context)
 #   insecureAPI.DeprecatedOr...  wants C11 Annex K (memcpy_s, ...), not in Zephyr's libc
 WarningsAsErrors: ''
-HeaderFilterRegex: '(ha_tool|dut_sim|common)/'
+HeaderFilterRegex: '(leabench|dut_sim|common)/'

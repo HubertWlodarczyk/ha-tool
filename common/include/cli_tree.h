@@ -6,7 +6,7 @@
 
 /*
  * Command table and dispatcher: the commands of an application are a table generated from the
- * protocol specification (tools/protogen, e.g. ha_tool/src/cli_table.c). The shell only knows the
+ * protocol specification (tools/protogen, e.g. leabench/src/cli_table.c). The shell only knows the
  * first word of each command; cli_dispatch() finds the command, checks the positional arguments,
  * keys (key=value) and flags (--name), and calls the handler. Unknown commands get the nearest
  * valid ones as a hint; 'help' is printed from the same table.

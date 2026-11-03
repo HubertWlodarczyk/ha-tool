@@ -6,6 +6,6 @@
 # Needs the simulation builds (scripts/build.sh).
 #   scripts/analyze.sh                    everything
 #   scripts/analyze.sh --only tidy        one tool
-#   scripts/analyze.sh ha_tool/src/dev.c  some files
+#   scripts/analyze.sh leabench/src/dev.c  some files
 set -euo pipefail
 exec python3 "$(dirname "$0")/../tools/analyze/analyze.py" "$@"

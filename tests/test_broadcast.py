@@ -1,7 +1,7 @@
 # Copyright (c) 2026 Hubert Włodarczyk
 # SPDX-License-Identifier: MPL-2.0
 
-"""Auracast broadcast source against the simulated hearing aid's broadcast sink. Each BIS
+"""Auracast broadcast source against the simulated device's broadcast sink. Each BIS
 carries its own tone, so the DUT can verify left/right routing."""
 
 import time
@@ -132,7 +132,7 @@ def test_custom_subgroups_and_per_bis_parameters(pair):
     for idx, freq in (("1", 500), ("2", 1000), ("3", 1500)):
         dut.wait_evt("dut_audio", since=m, src=f"bcast_bis{idx}", freq=near(freq), timeout=10)
 
-    # A hearing aid picking only the English BIS
+    # A device picking only the English BIS
     m = dut.mark()
     dut.cmd("bcast scan name=Conference bis=3")
     dut.wait_evt(
@@ -175,7 +175,7 @@ def test_started_big_never_overlaps_running_one(pair):
     of the same interval; both then lost every other event. The periodic advertising train of
     the new broadcast could likewise land on the running BIG (Zephyr patch 0006). The start
     phase follows the moment the command arrives, so the test restarts the second BIG many
-    times while the hearing aid listens to the first.
+    times while the device listens to the first.
     """
     ha, dut = pair
     ha.cmd("broadcast 1 create name=Open preset=16_2 bis=1")

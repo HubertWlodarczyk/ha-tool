@@ -1,7 +1,7 @@
 # Copyright (c) 2026 Hubert Włodarczyk
 # SPDX-License-Identifier: MPL-2.0
 
-"""Virtual devices against the simulated hearing aid: bonding, filling the bond list,
+"""Virtual devices against the simulated device: bonding, filling the bond list,
 eviction, reconnection with stored keys and "phone forgot the device"."""
 
 from helpers import connect, disconnect
@@ -31,7 +31,7 @@ def test_fill_bond_list_evicts_oldest(setup):
     max_bonds = int(status["max_bonds"])
     assert status["overwrite_oldest"] == "1"
 
-    # One more device than the hearing aid can remember, bonded one after another
+    # One more device than the device can remember, bonded one after another
     devs = []
     for i in range(max_bonds + 1):
         m = dut.mark()
@@ -62,7 +62,7 @@ def test_fill_bond_list_evicts_oldest(setup):
 
 
 def test_phone_forgets_device(setup):
-    """Phone deletes its keys; the hearing aid keeps its bond and refuses to re-pair
+    """Phone deletes its keys; the device keeps its bond and refuses to re-pair
     (Zephyr default: no unauthenticated bond overwrite) until its own bond is cleared."""
     ha, dut, addr = setup
     dev = connect(ha, addr)
@@ -79,7 +79,7 @@ def test_phone_forgets_device(setup):
     assert dut.cmd("bonds")["count"] == "1"
     disconnect(ha, dev)
 
-    # Clear the bond on the hearing aid ("forget phone"), then pairing works again
+    # Clear the bond on the device ("forget phone"), then pairing works again
     dut.cmd(f"unpair {phone_addr}")
     ha.cmd(f"bonding connect {dev} address={addr}")
     ha.wait_evt("bonding_connected", id=dev)
@@ -88,7 +88,7 @@ def test_phone_forgets_device(setup):
 
 
 def test_parallel_connections(setup):
-    """Several virtual devices connected to the hearing aid at the same time."""
+    """Several virtual devices connected to the device at the same time."""
     ha, dut, addr = setup
     a = connect(ha, addr, name="phone")
     b = connect(ha, addr, name="tablet")

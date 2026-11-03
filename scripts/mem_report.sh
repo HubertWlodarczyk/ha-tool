@@ -2,11 +2,11 @@
 # Copyright (c) 2026 Hubert Włodarczyk
 # SPDX-License-Identifier: MPL-2.0
 
-# Memory of the nRF5340 DK images for a configuration variant: builds ha_tool (app core) and the
+# Memory of the nRF5340 DK images for a configuration variant: builds leabench (app core) and the
 # controller (hci_ipc, net core) with extra Kconfig options and prints RAM / flash of both, plus
 # the largest RAM symbols of the net core.
 #   scripts/mem_report.sh <name> [hci_ipc_CONFIG_X=v ...] [CONFIG_Y=v ...]
-#     hci_ipc_CONFIG_*  net core option (ha_tool/netcore.conf), CONFIG_*  app core option
+#     hci_ipc_CONFIG_*  net core option (leabench/netcore.conf), CONFIG_*  app core option
 #   scripts/mem_report.sh base                      # the configuration as committed
 #   scripts/mem_report.sh iso17 hci_ipc_CONFIG_BT_CTLR_ISO_TX_BUFFERS=17 \
 #     hci_ipc_CONFIG_BT_ISO_TX_BUF_COUNT=17 CONFIG_BT_ISO_TX_BUF_COUNT=17
@@ -25,7 +25,7 @@ for opt in "$@"; do
   DEFS+=("-D$opt")
 done
 
-west build -b nrf5340dk/nrf5340/cpuapp --sysbuild -p auto -d "$BUILD" "$ROOT/ha_tool" \
+west build -b nrf5340dk/nrf5340/cpuapp --sysbuild -p auto -d "$BUILD" "$ROOT/leabench" \
   -- "${DEFS[@]}" > "$OUT/$NAME.build.log" 2>&1 || {
   tail -30 "$OUT/$NAME.build.log"
   exit 1

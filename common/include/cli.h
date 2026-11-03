@@ -5,7 +5,7 @@
  */
 
 /*
- * Machine-parsable CLI helpers shared by ha_tool and dut_sim.
+ * Machine-parsable CLI helpers shared by leabench and dut_sim.
  *
  * Output protocol (one line each), 'text' (default) and 'human':
  *   OK [key=value ...]          final reply of a command that succeeded
@@ -18,7 +18,7 @@
  *   {"type":"ok",...}  {"type":"err","errno":-22,...,"msg":"..."}
  *   {"type":"evt","t":1234,"evt":"<event name>",...}  {"type":"data","tag":"DEV",...}
  * Values are strings; words that are not key=value go to "msg". The protocol is documented in
- * protocol/hatool.yaml and docs/protocol.md.
+ * protocol/leabench.yaml and docs/protocol.md.
  */
 
 #ifndef CLI_H_

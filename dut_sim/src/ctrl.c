@@ -5,7 +5,7 @@
  */
 
 /*
- * Hearing aid controls:
+ * Device controls:
  *  - Call Control client (TBS client on the phone's GTBS): reports call states, "buttons" to
  *    accept / reject / hold calls
  *  - Media Control client: reports media state, play/pause buttons
@@ -502,7 +502,7 @@ static int cmd_media(const struct shell *sh, size_t argc, char **argv)
 	return 0;
 }
 
-/* The hearing aid user dials (CCP originate): the phone reports phone_call_request */
+/* The device user dials (CCP originate): the phone reports phone_call_request */
 static int cmd_call_dial(const struct shell *sh, size_t argc, char **argv)
 {
 	int err;
@@ -524,8 +524,7 @@ static int cmd_call_dial(const struct shell *sh, size_t argc, char **argv)
 }
 
 SHELL_STATIC_SUBCMD_SET_CREATE(
-	call_cmds,
-	SHELL_CMD_ARG(dial, NULL, "<uri> - call from the hearing aid", cmd_call_dial, 2, 0),
+	call_cmds, SHELL_CMD_ARG(dial, NULL, "<uri> - call from the device", cmd_call_dial, 2, 0),
 	SHELL_CMD_ARG(accept, NULL, "[idx=<n>] - answer the incoming call", cmd_call_accept, 1, 1),
 	SHELL_CMD_ARG(end, NULL, "[idx=<n>] - reject / hang up", cmd_call_end, 1, 1),
 	SHELL_CMD_ARG(hold, NULL, "[idx=<n>]", cmd_call_hold, 1, 1),

@@ -71,7 +71,7 @@ patches:
     date: 2026-11-01
     upstreamable: true
   # The shell always registered its own 'help' root command. A Kconfig option makes it optional,
-  # so ha_tool provides 'help' generated from the protocol specification (common/src/cli_tree.c).
+  # so leabench provides 'help' generated from the protocol specification (common/src/cli_tree.c).
   - path: zephyr/0008-shell-builtin-help-optional.patch
     sha256sum: 0bec2c1ba836e48f9d596d51c757aa750f790de921f0a07275f0d4a9b153e1ac
     module: zephyr
@@ -103,7 +103,7 @@ patches:
   # After an Invalid Change Counter error the volume controller re-reads the state and retries,
   # but resent the stale counter, so the retry failed too. It only learns the counter from
   # notifications (discovery does not read it): every write failed once the server's counter had
-  # moved, i.e. after any reconnection or on a hearing aid whose volume changed before.
+  # moved, i.e. after any reconnection or on a device whose volume changed before.
   - path: zephyr/0011-vcp-vol-ctlr-retry-with-read-counter.patch
     sha256sum: 749bbe79ea52c32979fb6d463f9db477137eef6e14417648b0dc3c486ada2624
     module: zephyr

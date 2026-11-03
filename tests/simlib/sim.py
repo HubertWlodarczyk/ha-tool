@@ -1,7 +1,7 @@
 # Copyright (c) 2026 Hubert Włodarczyk
 # SPDX-License-Identifier: MPL-2.0
 
-"""BabbleSim simulations of ha_tool / dut_sim images (device processes, phy, handbrake)."""
+"""BabbleSim simulations of leabench / dut_sim images (device processes, phy, handbrake)."""
 
 from __future__ import annotations
 
@@ -18,13 +18,13 @@ import uuid
 from .device import Device
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-BUILD = pathlib.Path(os.environ.get("HA_BUILD_DIR", ROOT / "build"))
+BUILD = pathlib.Path(os.environ.get("LEA_BUILD_DIR", ROOT / "build"))
 BSIM_OUT = pathlib.Path(
     os.environ.get("BSIM_OUT_PATH", pathlib.Path.home() / "zephyrproject/tools/bsim")
 )
 # Build variant: "" (normal), "asan" (scripts/build.sh sim --sanitize), "cov" (--coverage)
-VARIANT = os.environ.get("HA_VARIANT", "")
-SIM_SPEED = float(os.environ.get("HA_SIM_SPEED", "1.0"))  # simulated seconds per real second
+VARIANT = os.environ.get("LEA_VARIANT", "")
+SIM_SPEED = float(os.environ.get("LEA_SIM_SPEED", "1.0"))  # simulated seconds per real second
 PTY_RE = re.compile(r"UART 0 .*connected to pseudotty: (\S+)")
 # Sanitizer reports in a device log (ASan aborts the process, UBSan only prints)
 SANITIZER_RE = re.compile(
@@ -125,7 +125,7 @@ class Sim:
     def start(
         self, images: list[tuple[str, str]], sim_length_s: float = 3600, attach: bool = True
     ) -> list[Device]:
-        """images: (name, app) pairs, app being the build directory name (ha_tool/dut_sim).
+        """images: (name, app) pairs, app being the build directory name (leabench/dut_sim).
 
         With attach=False the CLIs are left free for interactive use and self.ptys holds the
         (name, pty) pairs.
@@ -147,7 +147,7 @@ class Sim:
                 f"-rs={d + 1}",
                 f"-flash_app={self.outdir / (name + '.flash')}",
             ]
-            if os.environ.get("HA_GDB") == name:
+            if os.environ.get("LEA_GDB") == name:
                 # Debug aid: SIGINT the inferior to get all thread backtraces in <name>.log
                 args = [
                     "gdb",
@@ -167,7 +167,7 @@ class Sim:
             ["./bs_device_handbrake", f"-s={self.sim_id}", f"-d={n}", f"-r={self.speed}"],
             "handbrake",
         )
-        # HA_PHY_ARGS: extra phy options, e.g. "-dump_imm" to keep complete air traces in
+        # LEA_PHY_ARGS: extra phy options, e.g. "-dump_imm" to keep complete air traces in
         # $BSIM_OUT_PATH/results/<sim_id>/ (analyse with scripts/airtime.py)
         self._spawn(
             [
@@ -175,7 +175,7 @@ class Sim:
                 f"-s={self.sim_id}",
                 f"-D={n + 1}",
                 f"-sim_length={int(sim_length_s * 1e6)}",
-                *os.environ.get("HA_PHY_ARGS", "").split(),
+                *os.environ.get("LEA_PHY_ARGS", "").split(),
             ],
             "phy",
         )

@@ -1,8 +1,8 @@
 # Copyright (c) 2026 Hubert Włodarczyk
 # SPDX-License-Identifier: MPL-2.0
 
-"""Firmware command table: ha_tool/src/cli_table.c (table + shell root words) and
-ha_tool/src/cli_cmds.h (handler prototypes). The dispatcher is common/src/cli_tree.c."""
+"""Firmware command table: leabench/src/cli_table.c (table + shell root words) and
+leabench/src/cli_cmds.h (handler prototypes). The dispatcher is common/src/cli_tree.c."""
 
 from __future__ import annotations
 

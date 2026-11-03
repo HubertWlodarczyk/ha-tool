@@ -150,7 +150,7 @@ le-source call accept
 
 `le-source` does not mean a physical device type. `Tablet` can be the name of
 a test identity, but the same role can represent a phone, a TV, a computer or
-another LE Audio source. The remote device can be a hearing aid, earbuds, a
+another LE Audio source. The remote device can be a device, earbuds, a
 speaker or another LE Audio receiver.
 
 ### Case: many virtual devices and bonds
@@ -258,7 +258,7 @@ functional paths. They differ only in how many arguments the user gave.
 
 The former names `dev`, `phone` and `bcast` were implementation names of the
 earlier firmware. The migration moves their commands into one target
-specification in [protocol/hatool.yaml](../protocol/hatool.yaml). We do not
+specification in [protocol/leabench.yaml](../protocol/leabench.yaml). We do not
 create two independent handlers or two validation models.
 
 ## Resource model
@@ -893,7 +893,7 @@ Audio source profile regardless of that identity's name.
 
 `volume`, `mute`, `preset`, `mic` and `balance` always send control to the
 currently connected device. They do not change the level or parameters of the
-generated test signal locally. The remote device can be a hearing aid,
+generated test signal locally. The remote device can be a device,
 earbuds, a speaker or another LE Audio receiver.
 
 In this document the **connected device** means the remote Bluetooth device
@@ -1218,8 +1218,8 @@ The design meets its goals if the tester can:
 
 ## Implementation decisions
 
-Clarifications adopted during implementation (the `ha_tool` firmware, the
-`protocol/hatool.yaml` specification):
+Clarifications adopted during implementation (the `leabench` firmware, the
+`protocol/leabench.yaml` specification):
 
 - The BIG `interval` is given in ms: `7.5` or `10`.
 - `broadcast <n> create` on an existing BIG returns an error with the hint

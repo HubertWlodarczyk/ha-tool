@@ -1,8 +1,8 @@
 # Copyright (c) 2026 Hubert Włodarczyk
 # SPDX-License-Identifier: MPL-2.0
 
-"""How many BIGs / BISes ha_tool runs at once, plain and encrypted, and the air time budget that
-predicts it (broadcast budget, refusal at broadcast <n> start). The simulated hearing aid checks
+"""How many BIGs / BISes leabench runs at once, plain and encrypted, and the air time budget that
+predicts it (broadcast budget, refusal at broadcast <n> start). The simulated device checks
 every BIS of every BIG for loss and the right tone."""
 
 import pytest

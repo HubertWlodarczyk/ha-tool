@@ -13,7 +13,7 @@ cd "$ROOT"
 status=0
 fail() { echo "lint: $1"; status=1; }
 
-mapfile -t C_FILES < <(git ls-files '*.c' '*.h' | grep -v -e '^ha_tool/src/lc3_frames.c$')
+mapfile -t C_FILES < <(git ls-files '*.c' '*.h' | grep -v -e '^leabench/src/lc3_frames.c$')
 mapfile -t PY_FILES < <(git ls-files '*.py' 'scripts/*.py')
 
 if [ "${1:-}" = "--fix" ]; then

@@ -5,8 +5,8 @@
  */
 
 /*
- * dut_sim: a simulated LE Audio hearing aid used as the device under test while developing
- * ha_tool without hardware. CAP acceptor (unicast sink + source, broadcast sink), call control
+ * dut_sim: a simulated LE Audio device used as the device under test while developing
+ * leabench without hardware. CAP acceptor (unicast sink + source, broadcast sink), call control
  * client, media control client and volume renderer, with a small bond list.
  */
 
@@ -274,7 +274,7 @@ int main(void)
 	err = err ?: register_pacs();
 	err = err ?: unicast_init();
 	err = err ?: ctrl_init();
-	err = err ?: ha_services_init();
+	err = err ?: audio_services_init();
 	err = err ?: bsink_init();
 	err = err ?: bt_le_ext_adv_create(BT_BAP_ADV_PARAM_CONN_QUICK, NULL, &adv);
 	err = err ?: bt_le_ext_adv_set_data(adv, ad, ARRAY_SIZE(ad), NULL, 0);
@@ -335,7 +335,7 @@ static int cmd_status(const struct shell *sh, size_t argc, char **argv)
 	return 0;
 }
 
-/* RSSI of every link: what the hearing aid receives from the phone(s) */
+/* RSSI of every link: what the device receives from the phone(s) */
 static int cmd_rssi(const struct shell *sh, size_t argc, char **argv)
 {
 	char addr[CLI_ADDR_STR_LEN];
@@ -394,7 +394,7 @@ static int cmd_disconnect(const struct shell *sh, size_t argc, char **argv)
 	return 0;
 }
 
-/* The hearing aid asks the central for other connection parameters (all links) */
+/* The device asks the central for other connection parameters (all links) */
 static int cmd_conn_param(const struct shell *sh, size_t argc, char **argv)
 {
 	int err = 0;

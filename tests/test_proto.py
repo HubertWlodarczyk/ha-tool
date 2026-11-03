@@ -1,7 +1,7 @@
 # Copyright (c) 2026 Hubert Włodarczyk
 # SPDX-License-Identifier: MPL-2.0
 
-"""CLI protocol: keys checked by the firmware match protocol/hatool.yaml, JSON Lines and human
+"""CLI protocol: keys checked by the firmware match protocol/leabench.yaml, JSON Lines and human
 modes, quoting, event filter, limits / id / time. Runs on the simulation or a real DK."""
 
 import json
@@ -13,7 +13,7 @@ import yaml
 from helpers import raw_lines
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-SPEC = yaml.safe_load((ROOT / "protocol/hatool.yaml").read_text())
+SPEC = yaml.safe_load((ROOT / "protocol/leabench.yaml").read_text())
 
 
 def test_firmware_matches_spec(tool):
@@ -66,7 +66,7 @@ def test_human_mode(tool):
     lines = raw_lines(tool, "proto human")
     lines += raw_lines(tool, "status")
     try:
-        assert any(ln.startswith("ha> ") or ln == "status" or "status" in ln for ln in lines)
+        assert any(ln.startswith("lea> ") or ln == "status" or "status" in ln for ln in lines)
         assert any(ln.startswith("OK mode=") for ln in lines)
     finally:
         tool.cmd("proto text")

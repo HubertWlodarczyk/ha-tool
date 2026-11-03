@@ -2,12 +2,12 @@
 # Copyright (c) 2026 Hubert Włodarczyk
 # SPDX-License-Identifier: MPL-2.0
 
-"""Generates the protocol artefacts from protocol/hatool.yaml (the single source):
+"""Generates the protocol artefacts from protocol/leabench.yaml (the single source):
 
-    clients/python/hatool/_generated.py         types + command methods of the Python client
-    clients/java/src/main/java/io/hatool/gen/   command classes of the Java client
+    clients/python/leabench/_generated.py         types + command methods of the Python client
+    clients/java/src/main/java/io/leabench/gen/   command classes of the Java client
     docs/protocol.md                            command and event reference
-    ha_tool/src/cli_table.c, cli_cmds.h         firmware command table (clang-formatted)
+    leabench/src/cli_table.c, cli_cmds.h         firmware command table (clang-formatted)
 
     tools/protogen/gen.py           regenerate
     tools/protogen/gen.py --check   fail if a generated file is out of date (CI, scripts/lint.sh)
@@ -29,11 +29,11 @@ import emit_python
 import spec as protocol
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-SPEC = ROOT / "protocol/hatool.yaml"
-PY_OUT = ROOT / "clients/python/hatool/_generated.py"
-JAVA_DIR = ROOT / "clients/java/src/main/java/io/hatool/gen"
+SPEC = ROOT / "protocol/leabench.yaml"
+PY_OUT = ROOT / "clients/python/leabench/_generated.py"
+JAVA_DIR = ROOT / "clients/java/src/main/java/io/leabench/gen"
 DOC_OUT = ROOT / "docs/protocol.md"
-C_DIR = ROOT / "ha_tool/src"
+C_DIR = ROOT / "leabench/src"
 
 
 def clang_format(path: pathlib.Path, text: str) -> str:

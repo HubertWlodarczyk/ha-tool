@@ -1,8 +1,8 @@
 # Copyright (c) 2026 Hubert Włodarczyk
 # SPDX-License-Identifier: MPL-2.0
 
-"""ha_tool never writes flash: virtual devices, their identities and bonds live in RAM. After a
-reboot of the tool the device list is empty, while the hearing aid (which does persist its bonds)
+"""leabench never writes flash: virtual devices, their identities and bonds live in RAM. After a
+reboot of the tool the device list is empty, while the device (which does persist its bonds)
 keeps an orphaned bond; new virtual devices bond normally."""
 
 import time
@@ -10,7 +10,7 @@ import time
 from helpers import OUT, connect, disconnect
 from simlib import Sim
 
-IMAGES = [("ha_tool", "ha_tool"), ("dut", "dut_sim")]
+IMAGES = [("leabench", "leabench"), ("dut", "dut_sim")]
 
 
 def test_tool_reboot():
@@ -33,12 +33,12 @@ def test_tool_reboot():
     try:
         ha, dut = sim.start(IMAGES)
         assert dut.cmd("addr")["addr"] == addr
-        assert dut.cmd("bonds")["count"] == "1"  # hearing aid: orphaned bond survives
+        assert dut.cmd("bonds")["count"] == "1"  # device: orphaned bond survives
 
         assert ha.cmd("status --verbose")["identities"] == "0"  # tool: nothing was stored
         assert not ha.cmd("bonding list").data
 
-        # The old identity address without its keys: the hearing aid refuses to overwrite the
+        # The old identity address without its keys: the device refuses to overwrite the
         # bond (what a phone sees after a factory reset). Given explicitly here; note that the
         # simulation's entropy is deterministic, so a plain 'bonding create' after a reboot would
         # also repeat the first address, unlike the real board.
@@ -47,7 +47,7 @@ def test_tool_reboot():
         ha.wait_evt("bonding_connected", id=old, timeout=20)
         m = ha.mark()
         ha.cmd(f"bonding pair {old}")
-        # Refused either during pairing, or after the key distribution when the hearing aid
+        # Refused either during pairing, or after the key distribution when the device
         # finds the identity address already bonded with other keys (disconnect, auth failure)
         deadline = time.monotonic() + 20
         while not ha.events_named("bonding_pair_failed", since=m) and not ha.events_named(

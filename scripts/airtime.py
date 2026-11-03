@@ -6,7 +6,7 @@
 
     scripts/airtime.py <results dir or sim id> [--from-ms N] [--to-ms N] [--dev 0]
 
-Run a test with HA_PHY_ARGS=-dump_imm so the phy writes complete traces to
+Run a test with LEA_PHY_ARGS=-dump_imm so the phy writes complete traces to
 $BSIM_OUT_PATH/results/<sim_id>/d_2G4_<dev>.Txv2.csv.
 
 Streams are told apart by access address and classified from their timing:

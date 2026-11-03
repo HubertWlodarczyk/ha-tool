@@ -6,15 +6,15 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "hatool"
+name = "leabench"
 version = "0.2.0"
-description = "Client for ha_tool (nRF5340 DK tool for hearing aid Bluetooth LE connectivity tests)"
+description = "Client for leabench, an LE Audio test bench on the nRF5340 DK"
 requires-python = ">=3.9"
 license = {text = "MPL-2.0"}
 dependencies = ["pyserial>=3.4"]
 
 [tool.setuptools]
-packages = ["hatool"]
+packages = ["leabench"]
 
 [tool.setuptools.package-data]
-hatool = ["py.typed"]
+leabench = ["py.typed"]

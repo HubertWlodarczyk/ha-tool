@@ -31,10 +31,10 @@ Before a commit, lint must be clean and the tests green.
 
 ## Adding or changing a CLI command
 
-1. **Specification:** describe it in `protocol/hatool.yaml` (line form, arguments, keys with
+1. **Specification:** describe it in `protocol/leabench.yaml` (line form, arguments, keys with
    types, flags, reply fields, data lines, new events).
 2. **Generation:** `tools/protogen/gen.py` regenerates the firmware command table
-   (`ha_tool/src/cli_table.c`, `cli_cmds.h`), the Python and Java clients and
+   (`leabench/src/cli_table.c`, `cli_cmds.h`), the Python and Java clients and
    `docs/protocol.md`.
 3. **Firmware handler:** implement `cmd_<path words>` declared in `cli_cmds.h`. The dispatcher
    (`common/src/cli_tree.c`) has already checked the positional arguments, keys and flags against
@@ -44,7 +44,7 @@ Before a commit, lint must be clean and the tests green.
 
 ## LC3 frame table
 
-`scripts/gen_lc3_frames.sh` regenerates `ha_tool/src/lc3_frames.c` (deterministically, with a
+`scripts/gen_lc3_frames.sh` regenerates `leabench/src/lc3_frames.c` (deterministically, with a
 decoding self-test). The file is never edited by hand.
 
 ## Zephyr patches

@@ -20,14 +20,14 @@ def pytest_addoption(parser):
     parser.addoption(
         "--hw-port",
         default=None,
-        help="serial port of a real nRF5340 DK running ha_tool (e.g. /dev/ttyACM0); "
-        "tests needing the simulated hearing aid are skipped",
+        help="serial port of a real nRF5340 DK running leabench (e.g. /dev/ttyACM0); "
+        "tests needing the simulated device are skipped",
     )
     parser.addoption("--hw-baud", type=int, default=1000000)
 
 
 def pytest_sessionfinish(session, exitstatus):
-    """Protocol conformance of everything ha_tool answered in this session (simlib)."""
+    """Protocol conformance of everything leabench answered in this session (simlib)."""
     from simlib import conformance
 
     if not conformance.replies and not conformance.events:
@@ -52,7 +52,7 @@ def _test_dir(request) -> pathlib.Path:
 @pytest.fixture
 def sim(request):
     if request.config.getoption("hw_port"):
-        pytest.skip("needs the simulation (simulated hearing aid)")
+        pytest.skip("needs the simulation (simulated device)")
     s = Sim(_test_dir(request))
     yield s
     s.stop()
@@ -60,15 +60,15 @@ def sim(request):
 
 @pytest.fixture
 def tool(request) -> Device:
-    """ha_tool alone: simulated, or the real DK given with --hw-port (reset before the test)."""
+    """leabench alone: simulated, or the real DK given with --hw-port (reset before the test)."""
     port = request.config.getoption("hw_port")
     if port:
         ha = Device(
-            "ha_tool",
+            "leabench",
             port,
-            _test_dir(request) / "ha_tool.log",
+            _test_dir(request) / "leabench.log",
             baud=request.config.getoption("hw_baud"),
-            app="ha_tool",
+            app="leabench",
         )
         ha.sync()
         ha.cmd("reset", timeout=15)
@@ -76,21 +76,21 @@ def tool(request) -> Device:
         ha.close()
         return
     s = Sim(_test_dir(request))
-    (ha,) = s.start([("ha_tool", "ha_tool")])
+    (ha,) = s.start([("leabench", "leabench")])
     yield ha
     s.stop()
 
 
 @pytest.fixture
 def pair(sim) -> tuple[Device, Device]:
-    """ha_tool + simulated hearing aid, not connected (broadcast tests)."""
-    ha, dut = sim.start([("ha_tool", "ha_tool"), ("dut", "dut_sim")])
+    """leabench + simulated device, not connected (broadcast tests)."""
+    ha, dut = sim.start([("leabench", "leabench"), ("dut", "dut_sim")])
     return ha, dut
 
 
 @pytest.fixture
 def setup(sim) -> tuple[Device, Device, str]:
-    """ha_tool + simulated hearing aid; returns (ha, dut, dut_address)."""
-    ha, dut = sim.start([("ha_tool", "ha_tool"), ("dut", "dut_sim")])
+    """leabench + simulated device; returns (ha, dut, dut_address)."""
+    ha, dut = sim.start([("leabench", "leabench"), ("dut", "dut_sim")])
     addr = dut.cmd("addr")["addr"]
     return ha, dut, addr

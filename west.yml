@@ -1,14 +1,14 @@
-# West manifest of the HA-Tool workspace: Zephyr pinned to v4.5.0, only the modules the
+# West manifest of the LEA Bench workspace: Zephyr pinned to v4.5.0, only the modules the
 # nRF5340 (DK and BabbleSim) builds need.
 #
 #   mkdir ha-ws && cd ha-ws
-#   git clone https://github.com/HubertWlodarczyk/ha-tool.git
-#   west init -l ha-tool && west update && west patch apply
+#   git clone https://github.com/HubertWlodarczyk/leabench.git
+#   west init -l leabench && west update && west patch apply
 manifest:
   version: "1.2"
 
   self:
-    path: ha-tool
+    path: leabench
 
   remotes:
     - name: zephyrproject-rtos

@@ -9,7 +9,7 @@ import pytest
 
 from helpers import STREAM_TIMEOUT, near, raw_lines
 
-DUT_NAME = "DUT-HA"  # CONFIG_BT_DEVICE_NAME of dut_sim
+DUT_NAME = "DUT-LEA"  # CONFIG_BT_DEVICE_NAME of dut_sim
 
 
 def test_identities_by_name(tool):
@@ -54,8 +54,8 @@ def test_connect_by_bluetooth_name(setup):
 
 @pytest.fixture
 def two_aids(sim):
-    """ha_tool and two hearing aids that advertise the same Bluetooth name."""
-    ha, a, b = sim.start([("ha_tool", "ha_tool"), ("dut", "dut_sim"), ("dut2", "dut_sim")])
+    """leabench and two devices that advertise the same Bluetooth name."""
+    ha, a, b = sim.start([("leabench", "leabench"), ("dut", "dut_sim"), ("dut2", "dut_sim")])
     return ha, a.cmd("addr")["addr"], b.cmd("addr")["addr"]
 
 
@@ -97,7 +97,7 @@ def test_unicast_session(setup):
     src = ha.cmd("le-source status")
     assert src["identity"] == "Phone" and src["stream"] == "active" and src["state"] == "music"
 
-    # one VCP operation at a time: each waits for the hearing aid's new state
+    # one VCP operation at a time: each waits for the device's new state
     ha.cmd("le-source volume set 120")
     ha.wait_evt("source_volume", volume=120, timeout=15)
     m = ha.mark()

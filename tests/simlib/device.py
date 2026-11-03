@@ -3,7 +3,7 @@
 
 """Text CLI client of one board (simulated pty or a DK serial port), used by the tests.
 
-CLI protocol (common/include/cli.h, protocol/hatool.yaml):
+CLI protocol (common/include/cli.h, protocol/leabench.yaml):
     OK [k=v ...]            final reply, success
     ERR <errno> <message>   final reply, failure
     EVT t=<ms> <name> k=v   asynchronous event
@@ -95,8 +95,8 @@ class Device:
         app: str | None = None,
     ):
         self.name = name
-        # ha_tool replies and events are checked against the protocol spec (conformance.py)
-        self.conform = app == "ha_tool"
+        # leabench replies and events are checked against the protocol spec (conformance.py)
+        self.conform = app == "leabench"
         self.log_path = log_path
         log_path.parent.mkdir(parents=True, exist_ok=True)
         self.fd = os.open(port, os.O_RDWR | os.O_NOCTTY)

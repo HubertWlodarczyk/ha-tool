@@ -31,19 +31,19 @@ def conf(path) -> dict[str, int]:
     return out
 
 
-APP = kconfig_defaults(ROOT / "ha_tool/Kconfig")
-APP_CONF = conf(ROOT / "ha_tool/prj.conf")
-CTLR = conf(ROOT / "ha_tool/netcore.conf")
+APP = kconfig_defaults(ROOT / "leabench/Kconfig")
+APP_CONF = conf(ROOT / "leabench/prj.conf")
+CTLR = conf(ROOT / "leabench/netcore.conf")
 
 
 def test_broadcast_limits_match_controller():
-    assert APP["HA_BCAST_MAX_BIGS"] <= CTLR["BT_CTLR_ADV_ISO_SET"]
-    assert APP["HA_BCAST_MAX_BIS"] <= CTLR["BT_CTLR_ADV_ISO_STREAM_MAX"]
-    assert APP["HA_BCAST_MAX_BIS_TOTAL"] <= CTLR["BT_CTLR_ADV_ISO_STREAM_COUNT"]
+    assert APP["LEA_BCAST_MAX_BIGS"] <= CTLR["BT_CTLR_ADV_ISO_SET"]
+    assert APP["LEA_BCAST_MAX_BIS"] <= CTLR["BT_CTLR_ADV_ISO_STREAM_MAX"]
+    assert APP["LEA_BCAST_MAX_BIS_TOTAL"] <= CTLR["BT_CTLR_ADV_ISO_STREAM_COUNT"]
     assert CTLR["BT_CTLR_ISOAL_SOURCES"] >= CTLR["BT_CTLR_ADV_ISO_STREAM_COUNT"]
     # one advertising set per BIG
-    assert APP_CONF["BT_EXT_ADV_MAX_ADV_SET"] >= APP["HA_BCAST_MAX_BIGS"]
-    assert CTLR["BT_CTLR_ADV_SET"] >= APP["HA_BCAST_MAX_BIGS"]
+    assert APP_CONF["BT_EXT_ADV_MAX_ADV_SET"] >= APP["LEA_BCAST_MAX_BIGS"]
+    assert CTLR["BT_CTLR_ADV_SET"] >= APP["LEA_BCAST_MAX_BIGS"]
 
 
 def test_iso_buffers_match():

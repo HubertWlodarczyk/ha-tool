@@ -54,7 +54,7 @@ def generate(spec: dict) -> str:
     out = [
         f"<!-- {HEADER} -->",
         "",
-        f"# ha_tool CLI protocol (version {spec['protocol']})",
+        f"# leabench CLI protocol (version {spec['protocol']})",
         "",
         spec.get("doc", ""),
         "",

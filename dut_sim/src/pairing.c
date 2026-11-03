@@ -5,8 +5,8 @@
  */
 
 /*
- * Security side of the simulated hearing aid: bonds (persisted, like a real one), pairing
- * results, and a pairing IO test double that lets tests play the hearing aid user (passkey,
+ * Security side of the simulated device: bonds (persisted, like a real one), pairing
+ * results, and a pairing IO test double that lets tests play the device user (passkey,
  * numeric comparison).
  */
 

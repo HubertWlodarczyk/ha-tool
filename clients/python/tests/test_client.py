@@ -1,7 +1,7 @@
 # Copyright (c) 2026 Hubert Włodarczyk
 # SPDX-License-Identifier: MPL-2.0
 
-"""Unit tests of the hatool client on a scripted fake board (no hardware, no simulation)."""
+"""Unit tests of the leabench client on a scripted fake board (no hardware, no simulation)."""
 
 from __future__ import annotations
 
@@ -13,10 +13,10 @@ from typing import Callable
 
 import pytest
 
-from hatool import HaTool, HaToolError
-from hatool import _generated as spec
-from hatool.core import build_line
-from hatool.transport import Transport
+from leabench import LeaBench, LeaBenchError
+from leabench import _generated as spec
+from leabench.core import build_line
+from leabench.transport import Transport
 
 
 class FakeBoard(Transport):
@@ -71,13 +71,13 @@ def default_reply(line: str) -> list | None:
     if line == "proto json":
         return [ok(proto="json")]
     if line == "version":
-        return [ok(app="ha_tool", version="0.2.0", zephyr="4.5.0", proto=spec.PROTOCOL)]
+        return [ok(app="leabench", version="0.2.0", zephyr="4.5.0", proto=spec.PROTOCOL)]
     return None
 
 
-def board(handler=None, **kw) -> tuple[HaTool, FakeBoard]:
+def board(handler=None, **kw) -> tuple[LeaBench, FakeBoard]:
     fake = FakeBoard(handler, **kw)
-    return HaTool(fake, sync_timeout=2), fake
+    return LeaBench(fake, sync_timeout=2), fake
 
 
 def test_sync_switches_to_json_and_checks_protocol():
@@ -93,13 +93,13 @@ def test_protocol_mismatch_is_refused():
 
     def write(data: bytes) -> None:
         if data.decode().strip() == "version":
-            fake.emit(ok(app="ha_tool", version="9", zephyr="x", proto=spec.PROTOCOL + 1))
+            fake.emit(ok(app="leabench", version="9", zephyr="x", proto=spec.PROTOCOL + 1))
             return
         orig(data)
 
     fake.write = write
-    with pytest.raises(HaToolError, match="protocol mismatch"):
-        HaTool(fake, sync_timeout=2)
+    with pytest.raises(LeaBenchError, match="protocol mismatch"):
+        LeaBench(fake, sync_timeout=2)
     assert fake.closed
 
 
@@ -119,11 +119,11 @@ def test_reply_values_typed_and_data_rows():
 
 def test_err_raises_with_errno_and_fields():
     tool, _ = board(lambda line: [{"type": "err", "errno": -22, "msg": "bad", "key": "x"}])
-    with pytest.raises(HaToolError) as exc:
+    with pytest.raises(LeaBenchError) as exc:
         tool.raw("broadcast 1 create bogus=1 bis=1")
     assert exc.value.errno == -22 and exc.value.msg == "bad" and exc.value.fields == {"key": "x"}
     err = tool.raw("broadcast 1 create bogus=1 bis=1", check=False)
-    assert isinstance(err, HaToolError)
+    assert isinstance(err, LeaBenchError)
     tool.close()
 
 
@@ -140,7 +140,7 @@ def test_err_raises_with_errno_and_fields():
 )
 def test_shell_errors_end_the_command(text):
     tool, _ = board(lambda line: [text])
-    with pytest.raises(HaToolError) as exc:
+    with pytest.raises(LeaBenchError) as exc:
         tool.raw("whatever", timeout=2)
     assert exc.value.errno == -22
     tool.close()

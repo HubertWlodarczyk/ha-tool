@@ -1,9 +1,9 @@
 # Copyright (c) 2026 Hubert Włodarczyk
 # SPDX-License-Identifier: MPL-2.0
 
-"""Virtual devices connect with resolvable private addresses (RPA) like real phones: the hearing
-aid sees an RPA, resolves it to the right identity after bonding, and every reconnection uses
-a fresh RPA. Several identities bonded with the same hearing aid must never be confused."""
+"""Virtual devices connect with resolvable private addresses (RPA) like real phones: the
+device sees an RPA, resolves it to the right identity after bonding, and every reconnection uses
+a fresh RPA. Several identities bonded with the same device must never be confused."""
 
 from helpers import connect, disconnect
 
@@ -29,7 +29,7 @@ def test_rpa_and_resolution(setup):
     assert [b["peer"] for b in dut.cmd("bonds").data] == [identity]  # IRK distributed
     disconnect(ha, dev)
 
-    # Reconnection: new RPA, resolved by the hearing aid to the bonded identity
+    # Reconnection: new RPA, resolved by the device to the bonded identity
     m = dut.mark()
     ha.cmd(f"bonding connect {dev} address={addr}")
     second = ha.wait_evt("bonding_connected", id=dev, timeout=20)["local"]
@@ -39,7 +39,7 @@ def test_rpa_and_resolution(setup):
 
 
 def test_identities_not_confused(setup):
-    """Two virtual devices bonded with the same hearing aid each resolve to their own identity."""
+    """Two virtual devices bonded with the same device each resolve to their own identity."""
     ha, dut, addr = setup
     ids = {}
     for name in ("PhoneA", "PhoneB"):

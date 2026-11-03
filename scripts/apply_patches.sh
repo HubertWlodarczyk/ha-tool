@@ -2,7 +2,7 @@
 # Copyright (c) 2026 Hubert Włodarczyk
 # SPDX-License-Identifier: MPL-2.0
 
-# Applies the Zephyr patches needed by ha_tool to the west workspace (idempotent).
+# Applies the Zephyr patches needed by leabench to the west workspace (idempotent).
 #   scripts/apply_patches.sh [path/to/zephyr]
 set -euo pipefail
 

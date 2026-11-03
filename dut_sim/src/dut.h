@@ -66,10 +66,10 @@ uint8_t unicast_stream_count(void);
 int pairing_init(void);
 int dut_bond_count(void);
 
-/* Volume renderer, HAS and MICP servers (ha_services.c) */
-int ha_services_init(void);
+/* Volume renderer, HAS and MICP servers (audio_services.c) */
+int audio_services_init(void);
 
-/* Call and media control clients, the hearing aid buttons (ctrl.c) */
+/* Call and media control clients, the device buttons (ctrl.c) */
 int ctrl_init(void);
 void ctrl_on_secure(struct bt_conn *conn);
 void ctrl_on_disconnected(struct bt_conn *conn);

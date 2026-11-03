@@ -2,14 +2,14 @@
 # Copyright (c) 2026 Hubert Włodarczyk
 # SPDX-License-Identifier: MPL-2.0
 
-"""Interactive simulation: starts ha_tool and the simulated hearing aid in BabbleSim and prints
+"""Interactive simulation: starts leabench and the simulated device in BabbleSim and prints
 the pseudoterminals of their CLIs (connect with e.g. `screen /dev/pts/N`). Ctrl+C stops it.
 
-    scripts/sim.py                 ha_tool + dut_sim
-    scripts/sim.py --no-dut        ha_tool alone
+    scripts/sim.py                 leabench + dut_sim
+    scripts/sim.py --no-dut        leabench alone
     scripts/sim.py --speed 2       2x faster than real time
-    scripts/sim.py --tcp 7000      also on TCP: ha_tool on 7000, dut on 7001 (Java / Python
-                                   clients: HaTool.tcp("localhost", 7000))
+    scripts/sim.py --tcp 7000      also on TCP: leabench on 7000, dut on 7001 (Java / Python
+                                   clients: LeaBench.tcp("localhost", 7000))
 """
 
 import argparse
@@ -25,7 +25,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    parser.add_argument("--no-dut", action="store_true", help="run ha_tool alone")
+    parser.add_argument("--no-dut", action="store_true", help="run leabench alone")
     parser.add_argument("--speed", type=float, default=1.0, help="simulated s per real s")
     parser.add_argument("--tcp", type=int, default=0, help="first TCP port (0: none)")
     parser.add_argument(
@@ -35,7 +35,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    images = [("ha_tool", "ha_tool")] + ([] if args.no_dut else [("dut", "dut_sim")])
+    images = [("leabench", "leabench")] + ([] if args.no_dut else [("dut", "dut_sim")])
     sim = Sim(args.out, speed=args.speed)
     try:
         sim.start(images, sim_length_s=24 * 3600, attach=False)

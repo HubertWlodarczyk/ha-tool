@@ -5,7 +5,7 @@
  */
 
 /*
- * Generates the LC3 frame table of ha_tool (ha_tool/src/lc3_frames.c): sine tones encoded once,
+ * Generates the LC3 frame table of leabench (leabench/src/lc3_frames.c): sine tones encoded once,
  * on the build host, so the firmware only copies frames.
  *
  * Every LC3 configuration of BAP (8..48 kHz incl. 44.1, 7.5 and 10 ms) gets the tones that repeat

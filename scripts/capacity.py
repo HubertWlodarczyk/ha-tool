@@ -7,10 +7,10 @@ actually gets.
 
 For every broadcast configuration (preset, rtn, PHY, encryption) it asks the budget how many
 BISes one BIG may have, then starts a BIG with that many (expected lossless) and one more with
---force (past the budget), and lets the simulated hearing aid receive each for a few seconds:
+--force (past the budget), and lets the simulated device receive each for a few seconds:
 found or not, frames lost per BIS. Multi-BIG cases start several BIGs at their combined edge.
-Unicast cases stream to the hearing aid while other links (other identities connected to a
-second simulated hearing aid) run with given connection intervals, and count lost CIS frames.
+Unicast cases stream to the device while other links (other identities connected to a
+second simulated device) run with given connection intervals, and count lost CIS frames.
 
     scripts/capacity.py broadcast [--jobs 4] [--quick]   -> build/capacity/broadcast.csv
     scripts/capacity.py multi     [--jobs 4]             -> build/capacity/multi.csv
@@ -90,7 +90,7 @@ def receive(dut, big: int, n: int, enc: bool) -> tuple[bool, int, int]:
 def run_bigs(name: str, bigs: list[tuple[dict, int]], force: bool) -> dict:
     """Starts the BIGs (with --force if asked), receives each; one result row."""
     sim = Sim(OUT / "runs" / name)
-    ha, dut = sim.start([("ha_tool", "ha_tool"), ("dut", "dut_sim")])
+    ha, dut = sim.start([("leabench", "leabench"), ("dut", "dut_sim")])
     row = {"case": name, "force": int(force)}
     try:
         air = []
@@ -128,7 +128,7 @@ def run_bigs(name: str, bigs: list[tuple[dict, int]], force: bool) -> dict:
 def budget_max(cfg: dict) -> int:
     """BISes one BIG of this configuration may have, by the budget (fresh tool)."""
     sim = Sim(OUT / "runs" / f"budget-{label(cfg)}")
-    (ha,) = sim.start([("ha_tool", "ha_tool")])
+    (ha,) = sim.start([("leabench", "leabench")])
     try:
         ha.cmd("mode broadcast")
         rep = ha.cmd(
@@ -211,12 +211,14 @@ def one_multi(spec) -> list[dict]:
 
 
 def unicast_case(params) -> list[dict]:
-    """A music stream to hearing aid 1 while identities 2..k keep links to hearing aid 2 with the
-    given interval (ms): frames the hearing aid misses."""
+    """A music stream to device 1 while identities 2..k keep links to device 2 with the
+    given interval (ms): frames the device misses."""
     others, interval = params
     name = f"unicast-links{others}-int{interval}"
     sim = Sim(OUT / "runs" / name)
-    devs = [("ha_tool", "ha_tool"), ("dut", "dut_sim")] + ([("dut2", "dut_sim")] if others else [])
+    devs = [("leabench", "leabench"), ("dut", "dut_sim")] + (
+        [("dut2", "dut_sim")] if others else []
+    )
     started = sim.start(devs)
     ha, dut = started[0], started[1]
     row = {"case": name, "links": others + 1, "interval_ms": interval}
@@ -254,7 +256,7 @@ def accept_matrix(presets: list[str], iso: int = 0) -> list[dict]:
     """One simulation: create and start (--force) every combination, record the controller's
     answer; the reception is not measured."""
     sim = Sim(OUT / "runs" / "accept")
-    (ha,) = sim.start([("ha_tool", "ha_tool")])
+    (ha,) = sim.start([("leabench", "leabench")])
     rows = []
     try:
         ha.cmd("mode broadcast")

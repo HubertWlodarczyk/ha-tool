@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MPL-2.0
 
 """Pairing methods of the identities: passkey entry and numeric comparison, the tester acting
-as the phone user ('bonding passkey', 'bonding confirm') and as the hearing aid user (dut)."""
+as the phone user ('bonding passkey', 'bonding confirm') and as the device user (dut)."""
 
 
 def connect_dev(ha, addr, io):
@@ -14,7 +14,7 @@ def connect_dev(ha, addr, io):
 
 def test_passkey_entry(setup):
     ha, dut, addr = setup
-    dut.cmd("io display")  # hearing aid shows the passkey
+    dut.cmd("io display")  # device shows the passkey
     dev = connect_dev(ha, addr, "keyboard")  # phone user types it
     m = dut.mark()
     ha.cmd(f"bonding pair {dev} sec=3")
@@ -55,7 +55,7 @@ def test_numeric_comparison(setup):
     assert ha.wait_evt("bonding_security", id=dev, timeout=20)["level"] == "4"
 
 
-def test_numeric_comparison_rejected_on_hearing_aid(setup):
+def test_numeric_comparison_rejected_on_device(setup):
     ha, dut, addr = setup
     dut.cmd("io yesno")
     dev = connect_dev(ha, addr, "yesno")
@@ -70,16 +70,16 @@ def test_numeric_comparison_rejected_on_hearing_aid(setup):
 
 
 def test_authenticated_pairing_impossible_without_io(setup):
-    """A phone asking for an authenticated link from a hearing aid without IO fails."""
+    """A phone asking for an authenticated link from a device without IO fails."""
     ha, _dut, addr = setup
-    dev = connect_dev(ha, addr, "keyboard")  # hearing aid: no IO (default)
+    dev = connect_dev(ha, addr, "keyboard")  # device: no IO (default)
     ha.cmd(f"bonding pair {dev} sec=3")
     ev = ha.wait_evt("bonding_security_failed", id=dev, timeout=20)
     assert ev["reason"] in ("auth_requirement", "auth_fail")
 
 
 def test_passkey_shown_by_phone(setup):
-    """The phone shows the passkey (bonding_passkey), the hearing aid user types it."""
+    """The phone shows the passkey (bonding_passkey), the device user types it."""
     ha, dut, addr = setup
     dut.cmd("io keyboard")
     dev = connect_dev(ha, addr, "display")
@@ -92,7 +92,7 @@ def test_passkey_shown_by_phone(setup):
 
 
 def test_pairing_cancelled_by_disconnection(setup):
-    """The link drops while the hearing aid user is typing the passkey: reported, no bond."""
+    """The link drops while the device user is typing the passkey: reported, no bond."""
     ha, dut, addr = setup
     dut.cmd("io keyboard")
     dev = connect_dev(ha, addr, "display")

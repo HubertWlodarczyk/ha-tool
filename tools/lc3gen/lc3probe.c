@@ -5,7 +5,7 @@
  */
 
 /*
- * Measures the tone quality of the LC3 frame table (ha_tool/src/lc3_frames.c), decoded the way
+ * Measures the tone quality of the LC3 frame table (leabench/src/lc3_frames.c), decoded the way
  * the firmware sends it: the frames of a tone in a loop, the level set by rewriting the global
  * gain field. For comparison every tone is also encoded the usual way (a continuous sine through
  * a fresh encoder), which shows what the codec itself gives at that bitrate.

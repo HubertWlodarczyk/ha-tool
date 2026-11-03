@@ -73,7 +73,7 @@ void cli_proto_set(const struct shell *sh, enum cli_proto p)
 {
 	proto = p;
 	shell_echo_set(sh, p == CLI_PROTO_HUMAN);
-	(void)shell_prompt_change(sh, p == CLI_PROTO_HUMAN ? "ha> " : "");
+	(void)shell_prompt_change(sh, p == CLI_PROTO_HUMAN ? "lea> " : "");
 }
 
 /* --- JSON writer: always produces a closed object; what does not fit is counted --- */

@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MPL-2.0
 
 """TX power as one more dimension of variation (no connectors needed): per virtual device
-connection and per broadcast; the simulated hearing aid sees the RSSI follow."""
+connection and per broadcast; the simulated device sees the RSSI follow."""
 
 from helpers import connect
 

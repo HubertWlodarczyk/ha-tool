@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: MPL-2.0
  */
 
-#ifndef HA_COMMON_HCI_UTIL_H_
-#define HA_COMMON_HCI_UTIL_H_
+#ifndef LEABENCH_COMMON_HCI_UTIL_H_
+#define LEABENCH_COMMON_HCI_UTIL_H_
 
 #include <stddef.h>
 #include <stdint.h>
@@ -28,4 +28,4 @@ struct bt_hci_vs_sched_entry;
  */
 int hci_read_schedule(struct bt_hci_vs_sched_entry *out, size_t max);
 
-#endif /* HA_COMMON_HCI_UTIL_H_ */
+#endif /* LEABENCH_COMMON_HCI_UTIL_H_ */

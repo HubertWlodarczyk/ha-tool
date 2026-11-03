@@ -1,4 +1,4 @@
-# UBSan suppressions for the --sanitize simulation build (HA_VARIANT=asan).
+# UBSan suppressions for the --sanitize simulation build (LEA_VARIANT=asan).
 # Only code outside this project (simulator models), each with the reason.
 
 # BabbleSim nRF HW model of the AES-CCM peripheral reads uint64_t from byte buffers. Simulator

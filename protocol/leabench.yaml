@@ -1,0 +1,929 @@
+# leabench CLI protocol: single source for docs/protocol.md, the Python / Java clients and the
+# firmware command table (tools/protogen/gen.py).
+protocol: 1
+doc: leabench CLI protocol. Commands are text lines; replies and events are OK/ERR/EVT lines (proto text)
+  or JSON Lines (proto json). Every event also carries t (ms since boot).
+types: {int: decimal integer, float: decimal number, bool: 0 or 1, str: text; quoted if it contains spaces,
+  addr: 'AA:BB:CC:DD:EE:FF/random|public', hex: 0x hexadecimal, enum: one of values}
+commands:
+- cmd: bonding create
+  mode: unicast
+  doc: New identity (address, IRK, keys), RAM only; the name is the tester's handle
+  args:
+  - {name: name, type: str, optional: true, doc: 'unique, not only digits (default identity<id>)'}
+  keys:
+  - {name: addr, type: addr, doc: 'static random identity address (default: generated)'}
+  - name: io
+    type: enum
+    values: [none, display, yesno, keyboard, kbd_display]
+  reply: {id: int, name: str, addr: addr, io: str}
+- cmd: bonding list
+  mode: unicast
+  doc: All identities with connection, device, security and bond
+  reply: {count: int}
+  data:
+    IDENTITY: {id: int, name: str, addr: addr, io: str, connection: str, device: addr, device_name: str,
+      security: str, bond: str, bonds: int, source: bool}
+- cmd: bonding show
+  mode: unicast
+  doc: One identity; --verbose adds the link parameters
+  args:
+  - {name: identity, type: str, doc: identity name or id}
+  flags:
+  - {name: verbose, doc: 'rssi, interval, latency, supervision timeout, PHY'}
+  reply: {id: int, name: str, addr: addr, io: str, connection: str, device: addr, device_name: str, security: str,
+    bond: str, bonds: int, source: bool, rssi: int, interval_us: int, latency: int, sto_ms: int, phy: str}
+  reply_optional: [rssi, interval_us, latency, sto_ms, phy]
+- cmd: bonding scan
+  mode: unicast
+  doc: Bluetooth devices that advertise a name
+  keys:
+  - {name: timeout, type: int, unit: ms, doc: default 2000}
+  reply: {count: int}
+  data:
+    DEVICE: {addr: addr, name: str, rssi: int}
+- cmd: bonding connect
+  mode: unicast
+  doc: 'Connect as this identity, to an address or a Bluetooth name (result: bonding_connected / bonding_connect_failed).
+    Pairing is a separate step'
+  args:
+  - {name: identity, type: str, doc: identity name or id}
+  keys:
+  - {name: address, type: addr, doc: device to connect to}
+  - {name: bluetooth-name, type: str, doc: or the Bluetooth name it advertises (exactly one device must
+      answer)}
+  - {name: scan, type: int, unit: ms, doc: scan for the name (default 2000)}
+  - {name: timeout, type: int, unit: ms}
+  - {name: interval, type: int, unit: ms}
+  - {name: latency, type: int}
+  - {name: sto, type: int, unit: ms}
+  reply: {id: int, state: str, device: addr, device_name: str}
+  data:
+    DEVICE: {addr: addr, name: str, rssi: int}
+- cmd: bonding pair
+  mode: unicast
+  doc: 'Encrypt or pair (result: bonding_security, bonding_paired / bonding_pair_failed)'
+  args:
+  - {name: identity, type: str, doc: identity name or id}
+  keys:
+  - name: sec
+    type: enum
+    values: ['2', '3', '4']
+  reply: {id: int, sec: int}
+- cmd: bonding passkey
+  mode: unicast
+  doc: Enter the passkey shown by the device
+  args:
+  - {name: identity, type: str, doc: identity name or id}
+  - {name: passkey, type: int}
+  reply: {id: int}
+- cmd: bonding confirm
+  mode: unicast
+  doc: 'Numeric comparison: yes or no'
+  args:
+  - {name: identity, type: str, doc: identity name or id}
+  - name: answer
+    type: enum
+    values: ['yes', 'no']
+  reply: {id: int}
+- cmd: bonding unpair
+  mode: unicast
+  doc: Forget the keys locally (the device keeps its bond)
+  args:
+  - {name: identity, type: str, doc: identity name or id}
+  reply: {id: int, bond: str}
+- cmd: bonding disconnect
+  mode: unicast
+  doc: End the connection; the bond stays
+  args:
+  - {name: identity, type: str, doc: identity name or id}
+  reply: {id: int}
+- cmd: bonding delete
+  mode: unicast
+  doc: Remove the identity and its keys
+  args:
+  - {name: identity, type: str, doc: identity name or id}
+  reply: {id: int}
+- cmd: bonding bonds
+  mode: unicast
+  doc: Bonds of this identity
+  args:
+  - {name: identity, type: str, doc: identity name or id}
+  reply: {id: int, count: int}
+- cmd: bonding io
+  mode: unicast
+  doc: Pairing IO capability (next connection)
+  args:
+  - {name: identity, type: str, doc: identity name or id}
+  - name: cap
+    type: enum
+    values: [none, display, yesno, keyboard, kbd_display]
+  reply: {id: int, io: str}
+- cmd: bonding param
+  mode: unicast
+  doc: 'Request connection parameters (result: bonding_param_updated)'
+  args:
+  - {name: identity, type: str, doc: identity name or id}
+  keys:
+  - {name: interval, type: int, unit: ms}
+  - {name: latency, type: int}
+  - {name: sto, type: int, unit: ms}
+  reply: {id: int}
+- cmd: bonding phy
+  mode: unicast
+  doc: 'Request a PHY (result: bonding_phy_updated)'
+  args:
+  - {name: identity, type: str, doc: identity name or id}
+  - name: phy
+    type: enum
+    values: [1m, 2m, coded]
+  reply: {id: int}
+- cmd: bonding dle
+  mode: unicast
+  doc: 'Request a data length (result: bonding_dle_updated)'
+  args:
+  - {name: identity, type: str, doc: identity name or id}
+  - name: octets
+    type: int
+    range: [27, 251]
+  reply: {id: int}
+- cmd: bonding txpower
+  mode: unicast
+  doc: TX power of the connection
+  args:
+  - {name: identity, type: str, doc: identity name or id}
+  - name: dbm
+    type: int
+    range: [-40, 8]
+  reply: {id: int, txpower: int}
+- cmd: bonding policy
+  mode: unicast
+  doc: answer to the peer's requests
+  keys:
+  - name: param_req
+    type: enum
+    values: [accept, reject]
+  reply: {param_req: str}
+- cmd: le-source attach
+  mode: unicast
+  doc: Identity the LE Audio source uses (one at a time; does not connect)
+  args:
+  - {name: identity, type: str, doc: identity name or id}
+  reply: {id: int, name: str}
+- cmd: le-source detach
+  mode: unicast
+  doc: Stop the source's audio and calls and release the identity
+  reply: {id: int}
+- cmd: le-source music start
+  mode: unicast
+  doc: Start music (Media context) on the attached identity
+  keys:
+  - {name: preset, type: str, doc: 'LC3 preset 8_1..48_6, _hr suffix: high reliability'}
+  - {name: freq, type: int, unit: Hz}
+  reply: {queued: bool}
+- cmd: le-source music stop
+  mode: unicast
+  doc: Pause music
+  reply: {queued: bool}
+- cmd: le-source call incoming
+  mode: unicast
+  doc: 'Incoming call: ringtone, then conversation after accept'
+  keys:
+  - {name: uri, type: str}
+  - {name: name, type: str}
+  - {name: ring_freq, type: int, unit: Hz}
+  - {name: call_freq, type: int, unit: Hz}
+  - {name: call_preset, type: str}
+  reply: {queued: bool}
+- cmd: le-source call outgoing
+  mode: unicast
+  doc: Outgoing call (the far end answers with call remote_answer)
+  keys:
+  - {name: uri, type: str}
+  - {name: call_freq, type: int, unit: Hz}
+  - {name: call_preset, type: str}
+  reply: {queued: bool}
+- cmd: le-source call accept
+  mode: unicast
+  doc: Accept the incoming call on the source
+  reply: {queued: bool}
+- cmd: le-source call remote_answer
+  mode: unicast
+  doc: The far end answers the outgoing call (test hook)
+  reply: {queued: bool}
+- cmd: le-source call end
+  mode: unicast
+  doc: Hang up
+  reply: {queued: bool}
+- cmd: le-source call hold
+  mode: unicast
+  doc: Put the call on hold
+  reply: {queued: bool}
+- cmd: le-source call retrieve
+  mode: unicast
+  doc: Retrieve a held call
+  reply: {queued: bool}
+- cmd: le-source alert
+  mode: unicast
+  doc: Notification sound (Alerts context)
+  keys:
+  - {name: ms, type: int, unit: ms}
+  - {name: freq, type: int, unit: Hz}
+  reply: {queued: bool}
+- cmd: le-source volume set
+  mode: unicast
+  doc: Absolute volume of the device (VCP)
+  args:
+  - name: volume
+    type: int
+    range: [0, 255]
+  reply: {queued: bool}
+- cmd: le-source volume up
+  mode: unicast
+  doc: Volume step up (VCP)
+  reply: {queued: bool}
+- cmd: le-source volume down
+  mode: unicast
+  doc: Volume step down (VCP)
+  reply: {queued: bool}
+- cmd: le-source mute
+  mode: unicast
+  doc: Mute the device (VCP)
+  args:
+  - name: state
+    type: enum
+    values: ['on', 'off']
+  reply: {queued: bool}
+- cmd: le-source preset list
+  mode: unicast
+  doc: Presets of the device (HAS)
+  reply: {queued: bool}
+- cmd: le-source preset next
+  mode: unicast
+  doc: Next preset (HAS)
+  reply: {queued: bool}
+- cmd: le-source preset prev
+  mode: unicast
+  doc: Previous preset (HAS)
+  reply: {queued: bool}
+- cmd: le-source preset set
+  mode: unicast
+  doc: Activate a preset (HAS)
+  args:
+  - name: index
+    type: int
+    range: [1, 255]
+  reply: {queued: bool}
+- cmd: le-source mic mute
+  mode: unicast
+  doc: Microphone mute (MICP)
+  args:
+  - name: state
+    type: enum
+    values: ['on', 'off']
+  reply: {queued: bool}
+- cmd: le-source mic gain
+  mode: unicast
+  doc: Microphone gain (MICP / AICS)
+  args:
+  - name: gain
+    type: int
+    range: [-128, 127]
+  reply: {queued: bool}
+- cmd: le-source balance set
+  mode: unicast
+  doc: Volume offset (VOCS)
+  args:
+  - name: offset
+    type: int
+    range: [-255, 255]
+  reply: {queued: bool}
+- cmd: le-source stop
+  mode: unicast
+  doc: Stop all audio and calls
+  reply: {queued: bool}
+- cmd: le-source status
+  mode: unicast
+  doc: Source state with the attached identity, its connection and the stream
+  reply: {identity: str, device: addr, device_name: str, connection: str, state: str, discovered: bool,
+    stream: str, ctx: str, preset: str, bidir: bool, call: int, call_state: str, music: bool, tx: int,
+    rx: int, rx_lost: int, rx_lost_pct: int, vcp: bool}
+- cmd: mode
+  doc: 'Radio mode: unicast (bonding, le-source) or broadcast; switching clears the whole context of the
+    previous mode'
+  args:
+  - name: mode
+    optional: true
+    type: enum
+    values: [unicast, broadcast]
+  reply: {mode: str}
+- cmd: help
+  doc: Commands under a prefix (all without one), with usage and description
+  args:
+  - {name: words, type: str, list: true, optional: true, doc: 'command prefix, e.g. bonding connect'}
+  reply: {commands: int}
+  data:
+    HELP: {cmd: str, usage: str, doc: str}
+- cmd: radio schedule
+  doc: 'Running roles of the controller (vendor Read Schedule, Zephyr patch 0013): next event, period
+    and reserved slot of each, and reservations that overlap within 60 ms; proto human: a timeline'
+  reply: {count: int, overlaps: int, window_us: int}
+  data:
+    SLOT: {role: str, id: int, next_us: int, period_us: int, slot_us: int}
+- cmd: version
+  doc: Firmware version
+  reply: {app: str, version: str, zephyr: str, proto: int}
+- cmd: status
+  doc: 'Overall state, layer by layer (--verbose: counters)'
+  flags:
+  - {name: verbose, doc: 'identities, connections, CLI counters'}
+  reply: {mode: str, identity: str, device: addr, device_name: str, connection: str, security: str, bond: str,
+    source: str, broadcasts_active: int, broadcasts_configured: int, identities: int, conns: int, lines_truncated: int,
+    fields_dropped: int, evt_dropped: int}
+  reply_optional: [identities, conns, lines_truncated, fields_dropped, evt_dropped]
+- cmd: reset
+  doc: 'Back to the start: stop everything, delete identities, bonds and broadcasts, no mode (proto human
+    needs --yes)'
+  flags:
+  - {name: 'yes', doc: confirm (required in proto human)}
+  reply: {}
+- cmd: stop
+  doc: Stop all radio activity of the current mode; identities, bonds and drafts stay
+  reply: {mode: str}
+- cmd: proto
+  doc: 'output format: text (k=v), json (JSON Lines for libraries), human (text with echo and prompt)'
+  args:
+  - name: format
+    optional: true
+    type: enum
+    values: [text, json, human]
+  flags:
+  - {name: verbose, doc: 'proto human: raw EVT lines next to their sentences'}
+  reply: {proto: str, version: int}
+- cmd: limits
+  doc: Limits of this build (devices, BIGs, BISes, LC3 configs)
+  reply: {identities: int, conns: int, bigs: int, bis_per_big: int, bis_total: int, subgroups: int, level_min: int,
+    level_max: int, txpower_min: int, txpower_max: int}
+  data:
+    LC3: {cfg: str, rate: int, frame_us: int, octets: int, tones: int}
+- cmd: id
+  doc: Unique chip id (hex digits, as many as the chip has)
+  reply: {id: str}
+- cmd: time
+  doc: Uptime (us, ms)
+  reply: {us: int, ms: int}
+- cmd: evt off
+  doc: stop printing these events
+  args:
+  - {name: names, type: str, list: true}
+  reply: {'off': str}
+- cmd: evt on
+  doc: 'print them again (no name: all)'
+  args:
+  - {name: names, type: str, list: true, optional: true}
+  reply: {'off': str}
+- cmd: evt list
+  doc: Filtered events
+  reply: {'off': str}
+- cmd: cli spec
+  doc: Commands and their keys
+  reply: {commands: int}
+  data:
+    SPEC: {cmd: str, keys: str}
+- cmd: cli stats
+  doc: 'Output health since boot: truncated lines, dropped JSON fields, lost events'
+  reply: {lines_truncated: int, fields_dropped: int, evt_dropped: int}
+- cmd: cli burst
+  doc: 'Diagnostic: n events at once, to check that the host keeps up (losses: dropped events, cli stats)'
+  keys:
+  - {name: n, type: int, doc: '1..1000, default 64'}
+  reply: {n: int}
+- cmd: broadcast list
+  mode: broadcast
+  doc: 'All BIGs: number, name, state, subgroups, BISes, Broadcast ID'
+  reply: {count: int, max: int}
+  data:
+    BIG: {big: int, state: str, broadcast_id: hex, name: str, subgroups: int, bis: int}
+- cmd: broadcast budget
+  mode: broadcast
+  doc: Air time used by the active BIGs (also in percent of the 10 ms period) and the BISes of a kind
+    one more BIG could hold
+  keys:
+  - {name: preset, type: str}
+  - name: rtn
+    type: int
+    range: [0, 15]
+  - name: phy
+    type: enum
+    values: [1m, 2m]
+  - {name: enc, type: bool}
+  reply: {used_us: int, free_us: int, budget_us: int, period_us: int, big_overhead_us: int, preset: str,
+    rtn: int, phy: str, enc: bool, next_big_bis: int, used_pct: float, free_pct: float}
+  data:
+    BIG: {big: int, name: str, bis: int, interval_us: int, airtime_us: int, cost_us: int, cost_pct: float}
+- cmd: broadcast start_all
+  mode: broadcast
+  wire: broadcast start
+  doc: Start every configured BIG; one RESULT line each, ERR if any failed
+  flags:
+  - {name: all, doc: every configured BIG, required: true}
+  - {name: force, doc: start anyway next to BIGs of another interval or past the air time budget (frames will be lost)}
+  reply: {count: int, started: int}
+  data:
+    RESULT: {big: int, name: str, result: str, errno: int, reason: str}
+- cmd: broadcast stop_all
+  mode: broadcast
+  wire: broadcast stop
+  doc: Stop every BIG (configuration kept)
+  flags:
+  - {name: all, doc: every configured BIG, required: true}
+  reply: {count: int, stopped: int}
+  data:
+    RESULT: {big: int, name: str, result: str, errno: int, reason: str}
+- cmd: broadcast restart_all
+  mode: broadcast
+  wire: broadcast restart
+  doc: Restart every configured BIG
+  flags:
+  - {name: all, doc: every configured BIG, required: true}
+  - {name: force, doc: start anyway next to BIGs of another interval or past the air time budget (frames will be lost)}
+  reply: {count: int, restarted: int}
+  data:
+    RESULT: {big: int, name: str, result: str, errno: int, reason: str}
+- cmd: broadcast create
+  mode: broadcast
+  wire: broadcast {big} create
+  doc: New BIG (draft); with preset= or bis= also one subgroup and that many BISes. Refused if the BIG
+    exists
+  args:
+  - name: big
+    type: int
+    range: [1, 3]
+    doc: BIG number
+  keys:
+  - {name: name, type: str}
+  - {name: code, type: str, doc: 'Broadcast Code (max 16 characters): encrypted BIG'}
+  - name: pbp
+    type: enum
+    values: [sq, hq, 'off']
+  - {name: id, type: hex}
+  - name: phy
+    type: enum
+    values: [1m, 2m]
+  - name: interval
+    type: enum
+    unit: ms
+    values: ['7.5', '10']
+  - name: rtn
+    type: int
+    range: [0, 15]
+  - {name: latency, type: int}
+  - name: iso
+    type: enum
+    values: ['0', '15', '20', '30', '40']
+    doc: 'common ISO interval in ms through BN > 1 (sets the latency), 0: off'
+  - {name: pd, type: int, unit: us}
+  - {name: pa, type: int, unit: ms}
+  - name: packing
+    type: enum
+    values: [seq, int]
+  - name: framing
+    type: enum
+    values: [unframed, framed]
+  - {name: preset, type: str, doc: 'LC3 preset 8_1..48_6, _hr suffix: high reliability'}
+  - {name: bis, type: int, doc: number of BISes (one subgroup)}
+  - {name: lang, type: str, doc: 'ISO 639-3, 3 letters'}
+  - name: ctx
+    type: enum
+    values: [media, live, conversational, instructional, sound_effects, notifications, alerts, emergency,
+      unspecified]
+  - {name: program, type: str}
+  reply: {big: int, state: str, broadcast_id: hex, name: str, subgroups: int, bis: int, encrypted: bool,
+    pbp: str}
+- cmd: broadcast set
+  mode: broadcast
+  wire: broadcast {big} set
+  doc: Change BIG parameters (not while active)
+  args:
+  - name: big
+    type: int
+    range: [1, 3]
+    doc: BIG number
+  keys:
+  - {name: name, type: str}
+  - {name: code, type: str, doc: 'Broadcast Code (max 16 characters): encrypted BIG'}
+  - name: pbp
+    type: enum
+    values: [sq, hq, 'off']
+  - {name: id, type: hex}
+  - name: phy
+    type: enum
+    values: [1m, 2m]
+  - name: interval
+    type: enum
+    unit: ms
+    values: ['7.5', '10']
+  - name: rtn
+    type: int
+    range: [0, 15]
+  - {name: latency, type: int}
+  - name: iso
+    type: enum
+    values: ['0', '15', '20', '30', '40']
+    doc: 'common ISO interval in ms through BN > 1 (sets the latency), 0: off'
+  - {name: pd, type: int, unit: us}
+  - {name: pa, type: int, unit: ms}
+  - name: packing
+    type: enum
+    values: [seq, int]
+  - name: framing
+    type: enum
+    values: [unframed, framed]
+  reply: {big: int, state: str}
+- cmd: broadcast delete
+  mode: broadcast
+  wire: broadcast {big} delete
+  doc: Stop and remove the BIG
+  args:
+  - name: big
+    type: int
+    range: [1, 3]
+    doc: BIG number
+  reply: {big: int}
+- cmd: broadcast show
+  mode: broadcast
+  wire: broadcast {big} show
+  doc: 'Configuration, state (draft | ready | active | stopped | error) and air time; proto human: a tree'
+  args:
+  - name: big
+    type: int
+    range: [1, 3]
+    doc: BIG number
+  reply: {big: int, state: str, broadcast_id: hex, name: str, encrypted: bool, pbp: str, subgroups: int,
+    bis: int, phy: str, interval_us: int, rtn: int, sdu: int, pa_ms: int, airtime_us: int, fits: bool,
+    bn: int, iso_interval_us: int}
+  data:
+    SUBGROUP: {sg: int, preset: str, rate: int, frame_us: int, octets: int, lang: str, ctx: str, program: str,
+      bis: int}
+    BIS: {bis: int, sg: int, location: str, cfg: str, rate: int, octets: int, tone: int, freq_actual: float,
+      level: int, level_actual: float, sent: int}
+- cmd: broadcast start
+  mode: broadcast
+  wire: broadcast {big} start
+  doc: 'Start the BIG (result: broadcast_started)'
+  args:
+  - name: big
+    type: int
+    range: [1, 3]
+    doc: BIG number
+  flags:
+  - {name: force, doc: start anyway next to BIGs of another interval or past the air time budget (frames will be lost)}
+  reply: {big: int, state: str, broadcast_id: hex}
+- cmd: broadcast stop
+  mode: broadcast
+  wire: broadcast {big} stop
+  doc: Stop the BIG; its configuration stays (state stopped)
+  args:
+  - name: big
+    type: int
+    range: [1, 3]
+    doc: BIG number
+  reply: {big: int, state: str}
+- cmd: broadcast restart
+  mode: broadcast
+  wire: broadcast {big} restart
+  doc: Stop and start the BIG
+  args:
+  - name: big
+    type: int
+    range: [1, 3]
+    doc: BIG number
+  flags:
+  - {name: force, doc: start anyway next to BIGs of another interval or past the air time budget (frames will be lost)}
+  reply: {big: int, state: str, broadcast_id: hex}
+- cmd: broadcast txpower
+  mode: broadcast
+  wire: broadcast {big} txpower
+  doc: TX power of advertising, PA and BIG (also live)
+  args:
+  - name: big
+    type: int
+    range: [1, 3]
+    doc: BIG number
+  - name: dbm
+    type: int
+    range: [-40, 8]
+  reply: {big: int, txpower: int, applied: str}
+  reply_optional: [applied]
+- cmd: broadcast subgroup add
+  mode: broadcast
+  wire: broadcast {big} subgroup add
+  doc: 'Add a subgroup: base codec configuration and metadata'
+  args:
+  - name: big
+    type: int
+    range: [1, 3]
+    doc: BIG number
+  keys:
+  - {name: preset, type: str, doc: 'LC3 preset 8_1..48_6, _hr suffix: high reliability'}
+  - {name: lang, type: str, doc: 'ISO 639-3, 3 letters'}
+  - name: ctx
+    type: enum
+    values: [media, live, conversational, instructional, sound_effects, notifications, alerts, emergency,
+      unspecified]
+  - {name: program, type: str}
+  reply: {big: int, sg: int, preset: str}
+- cmd: broadcast subgroup set
+  mode: broadcast
+  wire: broadcast {big} subgroup set
+  doc: Change a subgroup; live only lang, ctx and program of a BIG with one subgroup
+  args:
+  - name: big
+    type: int
+    range: [1, 3]
+    doc: BIG number
+  - {name: subgroup, type: int, doc: subgroup number within the BIG}
+  keys:
+  - {name: preset, type: str, doc: 'LC3 preset 8_1..48_6, _hr suffix: high reliability'}
+  - {name: lang, type: str, doc: 'ISO 639-3, 3 letters'}
+  - name: ctx
+    type: enum
+    values: [media, live, conversational, instructional, sound_effects, notifications, alerts, emergency,
+      unspecified]
+  - {name: program, type: str}
+  reply: {big: int, sg: int, preset: str, lang: str, ctx: str, program: str}
+- cmd: broadcast subgroup delete
+  mode: broadcast
+  wire: broadcast {big} subgroup delete
+  doc: Remove a subgroup without BISes; later ones move down
+  args:
+  - name: big
+    type: int
+    range: [1, 3]
+    doc: BIG number
+  - {name: subgroup, type: int, doc: subgroup number within the BIG}
+  reply: {big: int, subgroups: int}
+- cmd: broadcast subgroup list
+  mode: broadcast
+  wire: broadcast {big} subgroup list
+  doc: Subgroups of the BIG
+  args:
+  - name: big
+    type: int
+    range: [1, 3]
+    doc: BIG number
+  reply: {big: int, count: int}
+  data:
+    SUBGROUP: {sg: int, preset: str, rate: int, frame_us: int, octets: int, lang: str, ctx: str, program: str,
+      bis: int}
+- cmd: broadcast bis add
+  mode: broadcast
+  wire: broadcast {big} bis add
+  doc: 'Add a BIS: subgroup, channel, codec overrides, tone (reply: nearest tone of the frame table)'
+  args:
+  - name: big
+    type: int
+    range: [1, 3]
+    doc: BIG number
+  keys:
+  - {name: subgroup, type: int, doc: 'an existing subgroup (default: the last one)'}
+  - name: location
+    type: enum
+    values: [mono, left, right, front_center, back_left, back_right, side_left, side_right]
+  - name: rate
+    type: enum
+    values: ['8', '16', '24', '32', '44.1', '48']
+  - {name: octets, type: int}
+  - {name: freq, type: int, unit: Hz}
+  - {name: exact, type: bool}
+  - name: level
+    type: int
+    unit: dBFS
+    range: [-40, -2]
+  - name: pattern
+    type: enum
+    values: [cont, ring, beep]
+  reply: {big: int, bis: int, sg: int, location: str, cfg: str, freq: int, freq_actual: float, level: int,
+    level_actual: float}
+- cmd: broadcast bis set
+  mode: broadcast
+  wire: broadcast {big} bis set
+  doc: Change a BIS; subgroup, location, rate and octets not while active
+  args:
+  - name: big
+    type: int
+    range: [1, 3]
+    doc: BIG number
+  - {name: bis, type: int, doc: BIS number within the BIG}
+  keys:
+  - {name: subgroup, type: int, doc: 'an existing subgroup (default: the last one)'}
+  - name: location
+    type: enum
+    values: [mono, left, right, front_center, back_left, back_right, side_left, side_right]
+  - name: rate
+    type: enum
+    values: ['8', '16', '24', '32', '44.1', '48']
+  - {name: octets, type: int}
+  - {name: freq, type: int, unit: Hz}
+  - {name: exact, type: bool}
+  - name: level
+    type: int
+    unit: dBFS
+    range: [-40, -2]
+  - name: pattern
+    type: enum
+    values: [cont, ring, beep]
+  reply: {big: int, bis: int, sg: int, location: str, cfg: str, freq: int, freq_actual: float, level: int,
+    level_actual: float}
+- cmd: broadcast bis tone
+  mode: broadcast
+  wire: broadcast {big} bis tone
+  doc: 'Tone of a BIS, also live (reply: the tone actually sent)'
+  args:
+  - name: big
+    type: int
+    range: [1, 3]
+    doc: BIG number
+  - {name: bis, type: int, doc: BIS number within the BIG}
+  keys:
+  - {name: freq, type: int, unit: Hz}
+  - {name: exact, type: bool}
+  - name: level
+    type: int
+    unit: dBFS
+    range: [-40, -2]
+  - name: pattern
+    type: enum
+    values: [cont, ring, beep]
+  reply: {big: int, bis: int, sg: int, location: str, cfg: str, freq: int, freq_actual: float, level: int,
+    level_actual: float}
+- cmd: broadcast bis delete
+  mode: broadcast
+  wire: broadcast {big} bis delete
+  doc: Remove a BIS; later ones move down
+  args:
+  - name: big
+    type: int
+    range: [1, 3]
+    doc: BIG number
+  - {name: bis, type: int, doc: BIS number within the BIG}
+  reply: {big: int, bis: int}
+- cmd: broadcast bis list
+  mode: broadcast
+  wire: broadcast {big} bis list
+  doc: BISes of the BIG
+  args:
+  - name: big
+    type: int
+    range: [1, 3]
+    doc: BIG number
+  reply: {big: int, count: int}
+  data:
+    BIS: {bis: int, sg: int, location: str, cfg: str, rate: int, octets: int, tone: int, freq_actual: float,
+      level: int, level_actual: float, sent: int}
+events:
+  broadcast_error:
+    doc: ''
+    fields: {big: int, reason: str, started: int, bis: int, airtime_us: int}
+  broadcast_started:
+    doc: ''
+    fields: {big: int, broadcast_id: hex, name: str, bis: int, subgroups: int, encrypted: bool, airtime_us: int}
+  broadcast_stopped:
+    doc: ''
+    fields: {big: int, broadcast_id: hex, reason: str}
+  broadcast_warning:
+    doc: 'A BIG started with --force: reason=interval_mix (next to a BIG of another interval) or over_budget (past the air time budget; cost_us, free_us); reason=layout: the controller laid the BIG out differently from what it asked for (rtn_air repetitions, bn PDUs per SDU)'
+    fields: {big: int, reason: str, other: int, interval_us: int, other_us: int, airtime_us: int, other_airtime_us: int,
+      cost_us: int, free_us: int, rtn: int, rtn_air: int, bn: int}
+    optional: [other, interval_us, other_us, other_airtime_us, airtime_us, cost_us, free_us, rtn, rtn_air, bn]
+  bonding_confirm:
+    doc: ''
+    fields: {id: int, passkey: int}
+  bonding_connect_failed:
+    doc: ''
+    fields: {id: int, peer: addr, hci: str, reason: str}
+  bonding_connected:
+    doc: ''
+    fields: {id: int, peer: addr, local: addr, bonded: bool}
+  bonding_disconnected:
+    doc: ''
+    fields: {id: int, hci: str, reason: str}
+  bonding_dle_updated:
+    doc: ''
+    fields: {id: int, tx_len: int, rx_len: int}
+  bonding_mtu:
+    doc: ''
+    fields: {id: int, tx: int, rx: int}
+  bonding_pair_cancelled:
+    doc: ''
+    fields: {id: int}
+  bonding_pair_failed:
+    doc: ''
+    fields: {id: int, reason: str}
+  bonding_paired:
+    doc: ''
+    fields: {id: int, bonded: bool}
+  bonding_param_req:
+    doc: ''
+    fields: {id: int, interval_us: int, latency: int, sto_ms: int, accepted: bool}
+  bonding_param_updated:
+    doc: ''
+    fields: {id: int, interval_us: int, latency: int, sto_ms: int}
+  bonding_passkey:
+    doc: ''
+    fields: {id: int, passkey: int}
+  bonding_passkey_request:
+    doc: ''
+    fields: {id: int}
+  bonding_phy_updated:
+    doc: ''
+    fields: {id: int, tx: str, rx: str}
+  bonding_security:
+    doc: ''
+    fields: {id: int, level: int}
+  bonding_security_failed:
+    doc: ''
+    fields: {id: int, level: int, reason: str}
+  fatal:
+    doc: ''
+    fields: {reason: str, err: int}
+  mode:
+    doc: Mode changed
+    fields: {from: str, to: str}
+  source_balance:
+    doc: ''
+    fields: {offset: int}
+  source_call:
+    doc: ''
+    fields: {idx: int, state: str, by: str}
+  source_call_request:
+    doc: ''
+    fields: {idx: int, op: str, uri: str}
+  source_discovered:
+    doc: ''
+    fields: {id: int, sink: bool, source: bool, vcp: bool, vocs: bool, has: bool, micp: bool}
+  source_error:
+    doc: ''
+    fields: {op: str, err: int, state: str}
+  source_has:
+    doc: ''
+    fields: {type: str}
+  source_link_lost:
+    doc: ''
+    fields: {id: int}
+  source_media:
+    doc: ''
+    fields: {state: str}
+  source_mic:
+    doc: ''
+    fields: {mute: bool}
+  source_mic_input:
+    doc: ''
+    fields: {gain: int, mute: bool, mode: int}
+  source_music:
+    doc: 'Music state; reason (deferred: phone state) or by (playing / paused: who)'
+    fields: {state: str, reason: str, by: str}
+    optional: [reason, by]
+  source_preset:
+    doc: ''
+    fields: {active: int}
+  source_preset_list:
+    doc: ''
+    fields: {count: int}
+  source_preset_record:
+    doc: ''
+    fields: {idx: int, name: str, available: bool, writable: bool, updated: bool}
+    optional: [writable, updated]
+  source_state:
+    doc: ''
+    fields: {from: str, to: str, cause: str}
+  source_stopped:
+    doc: ''
+    fields: {}
+  source_stream_closed:
+    doc: ''
+    fields: {id: int}
+  source_stream_open:
+    doc: ''
+    fields: {id: int, ctx: str, preset: str, bidir: bool, tone: int}
+  source_stream_started:
+    doc: ''
+    fields: {id: int, dir: str}
+  source_stream_stopped:
+    doc: ''
+    fields: {id: int, dir: str, reason: str}
+  source_stream_updated:
+    doc: ''
+    fields: {id: int, ctx: str, tone: int}
+  source_volume:
+    doc: ''
+    fields: {id: int, volume: int, mute: bool}
+  ready:
+    doc: Boot completed
+    fields: {app: str, version: str, proto: int, addr: addr, identities: int}
+  burst:
+    doc: One event of 'cli burst'
+    fields: {i: int, n: int}
+  dropped:
+    doc: Events lost (queue full)
+    fields: {n: int}

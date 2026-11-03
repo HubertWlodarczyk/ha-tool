@@ -4,7 +4,7 @@
 """Long runs (pytest -m slow): broadcast soak with live changes, start/stop and connection
 cycles (nothing may leak), event bursts (losses reported exactly).
 
-Environment: HA_SOAK_S (soak length in simulated seconds, default 300), HA_CYCLES (default
+Environment: LEA_SOAK_S (soak length in simulated seconds, default 300), LEA_CYCLES (default
 200 broadcast / half as many connection cycles).
 """
 
@@ -20,8 +20,8 @@ from helpers import SYNC_TIMEOUT, big_tones, check_big, connect, create_big, nea
 
 pytestmark = pytest.mark.slow
 
-SOAK_S = int(os.environ.get("HA_SOAK_S", "300"))
-CYCLES = int(os.environ.get("HA_CYCLES", "200"))
+SOAK_S = int(os.environ.get("LEA_SOAK_S", "300"))
+CYCLES = int(os.environ.get("LEA_CYCLES", "200"))
 
 
 def sent(ha, big: int) -> list[int]:
@@ -30,7 +30,7 @@ def sent(ha, big: int) -> list[int]:
 
 def test_broadcast_soak(pair):
     """Two BIGs (6 plain + 3 encrypted BISes) for SOAK_S seconds; tone and level of one BIS
-    change every second. The hearing aid follows the plain BIG: no frame lost, ever; every
+    change every second. The device follows the plain BIG: no frame lost, ever; every
     BIS keeps sending one SDU per interval."""
     ha, dut = pair
     create_big(ha, 1, 6)
@@ -102,7 +102,7 @@ def test_broadcast_start_stop_cycles(pair):
 
 
 def test_connection_cycles(setup):
-    """CYCLES / 2 rounds of create, connect, pair, disconnect, delete; the hearing aid keeps
+    """CYCLES / 2 rounds of create, connect, pair, disconnect, delete; the device keeps
     only its newest bonds. Afterwards a new device still connects and pairs."""
     ha, _, addr = setup
     for i in range(CYCLES // 2):

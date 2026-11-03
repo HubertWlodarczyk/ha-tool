@@ -10,7 +10,7 @@ target-version = "py39"
 extend-exclude = ["build", "clients/java", "tests/out"]
 
 [tool.ruff.format]
-exclude = ["clients/python/hatool/_generated.py"]  # generated: tools/protogen
+exclude = ["clients/python/leabench/_generated.py"]  # generated: tools/protogen
 
 [tool.ruff.lint]
 select = ["E", "W", "F", "I", "UP", "B", "SIM", "RUF"]
@@ -20,10 +20,10 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"clients/python/hatool/_generated.py" = ["E501"]
+"clients/python/leabench/_generated.py" = ["E501"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["hatool", "simlib", "conftest", "helpers"]
+known-first-party = ["leabench", "simlib", "conftest", "helpers"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

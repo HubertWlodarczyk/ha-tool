@@ -2,7 +2,7 @@
 # Copyright (c) 2026 Hubert Włodarczyk
 # SPDX-License-Identifier: MPL-2.0
 
-"""Talk to ha_tool on a real nRF5340 DK (or a simulated board's pty).
+"""Talk to leabench on a real nRF5340 DK (or a simulated board's pty).
 
     scripts/cli.py --port /dev/ttyACM0 version
     scripts/cli.py --port /dev/ttyACM0 "dev create name=Phone" "dev list"
@@ -31,8 +31,8 @@ def main() -> int:
     ap.add_argument("commands", nargs="*")
     args = ap.parse_args()
 
-    log = pathlib.Path("/tmp") / "ha_tool_cli.log"
-    dev = Device("ha_tool", args.port, log, baud=args.baud or None)
+    log = pathlib.Path("/tmp") / "leabench_cli.log"
+    dev = Device("leabench", args.port, log, baud=args.baud or None)
     failed = False
     try:
         dev.sync(timeout=5)

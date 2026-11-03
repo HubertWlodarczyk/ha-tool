@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MPL-2.0
 
 """Phone simulation (LE Audio unicast + call / media / volume control) against the simulated
-hearing aid. The DUT decodes the audio and reports the tone it hears, so each test checks the
+device. The DUT decodes the audio and reports the tone it hears, so each test checks the
 audio content, not just the signalling."""
 
 import pytest
@@ -55,7 +55,7 @@ def test_incoming_call_interrupts_music(phone):
     dut.wait_evt("dut_call", since=m, state="incoming", timeout=15)
     dut.wait_evt("dut_audio", since=m, src="unicast", freq=near(800), timeout=10)
 
-    # The user answers on the hearing aid: bidirectional Conversational stream, call audio
+    # The user answers on the device: bidirectional Conversational stream, call audio
     m = dut.mark()
     dut.cmd("call accept")
     ha.wait_evt("source_call", state="active", by="peer", timeout=15)
@@ -73,7 +73,7 @@ def test_incoming_call_interrupts_music(phone):
     dut.wait_evt("dut_audio", since=m, src="unicast", freq=near(440), timeout=STREAM_TIMEOUT)
 
 
-def test_call_rejected_on_hearing_aid(phone):
+def test_call_rejected_on_device(phone):
     ha, dut = phone
     m = dut.mark()
     ha.cmd("le-source call incoming uri=tel:999")
@@ -98,7 +98,7 @@ def test_outgoing_call(phone):
     dut.wait_evt("dut_call", since=m, state="active", timeout=15)
     dut.wait_evt("dut_audio", since=m, src="unicast", freq=near(350), timeout=STREAM_TIMEOUT)
 
-    # Microphone stream from the hearing aid: received without loss
+    # Microphone stream from the device: received without loss
     st = ha.cmd("le-source status")
     assert int(st["rx"]) > 50 and st["rx_lost_pct"] == "0", st.raw
 
@@ -108,7 +108,7 @@ def test_outgoing_call(phone):
     dut.wait_evt("dut_call", since=m, state="active", timeout=15)
 
 
-def test_media_control_from_hearing_aid(phone):
+def test_media_control_from_device(phone):
     ha, dut = phone
     start_music(ha, dut)
     dut.wait_evt("dut_mcp_discovered", since=0, err=0, timeout=15)
@@ -147,10 +147,10 @@ def test_music_requested_during_alert_plays_after_it(phone):
     dut.wait_evt("dut_audio", since=dut.mark(), src="unicast", freq=near(440), timeout=10)
 
 
-def test_volume_after_hearing_aid_changed_it(setup):
-    """The user turned the hearing aid's volume before the phone connected, so the server's
+def test_volume_after_device_changed_it(setup):
+    """The user turned the device's volume before the phone connected, so the server's
     change counter is no longer 0: the first write must still work (Zephyr retried with the stale
-    counter and gave up, patch 0011; real hearing aids are rarely at counter 0)."""
+    counter and gave up, patch 0011; real devices are rarely at counter 0)."""
     ha, dut, addr = setup
     dut.cmd("volume 50")
     ha.cmd("mode unicast")
@@ -240,7 +240,7 @@ def test_argument_errors(tool):
 
 
 def test_link_lost_during_music(phone):
-    """The hearing aid drops the link while streaming: reported, phone back to idle."""
+    """The device drops the link while streaming: reported, phone back to idle."""
     ha, dut = phone
     start_music(ha, dut)
     m = ha.mark()
@@ -250,8 +250,8 @@ def test_link_lost_during_music(phone):
     assert ha.cmd("le-source status")["stream"] == "stopped"
 
 
-def test_call_from_hearing_aid(phone):
-    """The hearing aid user dials, holds and retrieves the call (CCP requests to the phone)."""
+def test_call_from_device(phone):
+    """The device user dials, holds and retrieves the call (CCP requests to the phone)."""
     ha, dut = phone
     dut.wait_evt("dut_ccp_discovered", since=0, timeout=STREAM_TIMEOUT)
     m = ha.mark()
