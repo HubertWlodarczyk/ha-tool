@@ -53,7 +53,7 @@ def create(ha, big: int, cfg: dict, n: int) -> dict:
     code = f" code=Cap{big}Key" if cfg.get("enc") else ""
     ha.cmd(
         f"broadcast {big} create name=Cap{big} preset={cfg['preset']} bis={n} rtn={cfg['rtn']}"
-        f" phy={cfg['phy']}{code}"
+        f" phy={cfg['phy']}{code}" + (f" iso={cfg['iso']}" if cfg.get("iso") else "")
     )
     actual = []
     for i, f in enumerate(tones(big, n), start=1):
@@ -141,7 +141,9 @@ def budget_max(cfg: dict) -> int:
 
 
 def label(cfg: dict) -> str:
-    return f"{cfg['preset']}-rtn{cfg['rtn']}-{cfg['phy']}{'-enc' if cfg.get('enc') else ''}"
+    return f"{cfg['preset']}-rtn{cfg['rtn']}-{cfg['phy']}{'-enc' if cfg.get('enc') else ''}" + (
+        f"-iso{cfg['iso']}" if cfg.get("iso") else ""
+    )
 
 
 def broadcast_cases(quick: bool, presets: list[str] | None = None) -> list[dict]:
@@ -239,7 +241,7 @@ def unicast_case(params) -> list[dict]:
 ACCEPT_PRESETS = ["16_2", "24_2", "32_2", "48_2", "48_4", "48_6", "441_2", "16_1", "48_1", "48_5"]
 
 
-def accept_matrix(presets: list[str]) -> list[dict]:
+def accept_matrix(presets: list[str], iso: int = 0) -> list[dict]:
     """One simulation: create and start (--force) every combination, record the controller's
     answer; the reception is not measured."""
     sim = Sim(OUT / "runs" / "accept")
@@ -254,7 +256,7 @@ def accept_matrix(presets: list[str]) -> list[dict]:
             [0, 1],
         ):
             for n in range(1, 9):
-                cfg = {"preset": preset, "rtn": rtn, "phy": phy, "enc": enc}
+                cfg = {"preset": preset, "rtn": rtn, "phy": phy, "enc": enc, "iso": iso}
                 show = create(ha, 1, cfg, n)
                 mark = ha.mark()
                 rep = ha.cmd("broadcast 1 start --force", check=False)
@@ -293,11 +295,12 @@ def main() -> None:
     parser.add_argument("--jobs", type=int, default=4, help="simulations in parallel")
     parser.add_argument("--quick", action="store_true", help="a smaller broadcast matrix")
     parser.add_argument("--presets", default=",".join(ACCEPT_PRESETS), help="accept: presets")
+    parser.add_argument("--iso", type=int, default=0, help="accept: common ISO interval (ms)")
     args = parser.parse_args()
 
     OUT.mkdir(parents=True, exist_ok=True)
     if args.what == "accept":
-        rows = accept_matrix(args.presets.split(","))
+        rows = accept_matrix(args.presets.split(","), args.iso)
         keys = list(rows[0])
         with open(OUT / "accept.csv", "w", newline="") as f:
             w = csv.DictWriter(f, fieldnames=keys)

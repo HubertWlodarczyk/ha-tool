@@ -162,7 +162,8 @@ public final class BroadcastCommands {
     /**
      * Configuration, state (draft | ready | active | stopped | error) and air time; proto human: a tree
      * <p>Reply: big (int), state (str), broadcast_id (hex), name (str), encrypted (bool), pbp (str), subgroups (int),
-     * bis (int), phy (str), interval_us (int), rtn (int), sdu (int), pa_ms (int), airtime_us (int), fits (bool)
+     * bis (int), phy (str), interval_us (int), rtn (int), sdu (int), pa_ms (int), airtime_us (int), fits (bool), bn
+     * (int), iso_interval_us (int)
      */
     public Reply show(int big) {
         return t.call("broadcast " + big + " show", List.of(), Map.of());

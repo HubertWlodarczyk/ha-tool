@@ -60,7 +60,7 @@ static void check_layout(const struct big *big, struct bt_bap_stream *bap_stream
 		return;
 	}
 
-	if (info.broadcaster.irc != big->qos.rtn + 1U || info.broadcaster.bn != 1U) {
+	if (info.broadcaster.irc != big->qos.rtn + 1U || info.broadcaster.bn != big_bn(&big->qos)) {
 		cli_evt("broadcast_warning", "big=%d reason=layout rtn=%u rtn_air=%u bn=%u",
 			big_number(big), big->qos.rtn, info.broadcaster.irc - 1U,
 			info.broadcaster.bn);
@@ -80,6 +80,8 @@ static void stream_started(struct bt_bap_stream *bap_stream)
 	err = audio_tx_start(&big->bis[i].stream, &big->bis[i].tone);
 	if (err != 0) {
 		LOG_ERR("TX start BIG %d BIS %d failed: %d", big_number(big), i + 1, err);
+	} else if (big_bn(&big->qos) > 1U) {
+		audio_tx_set_depth(&big->bis[i].stream, big_bn(&big->qos));
 	}
 
 	if (big->started == 0) {

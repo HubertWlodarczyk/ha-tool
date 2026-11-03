@@ -31,12 +31,11 @@ static const char *const keys_61[] = {"preset", "rtn", "phy", "enc", NULL};
 static const char *const flags_62[] = {"all", "force", NULL};
 static const char *const flags_63[] = {"all", NULL};
 static const char *const flags_64[] = {"all", "force", NULL};
-static const char *const keys_65[] = {"name",   "code",    "pbp",  "id",  "phy",     "interval",
-				      "rtn",    "latency", "pd",   "pa",  "packing", "framing",
-				      "preset", "bis",     "lang", "ctx", "program", NULL};
-static const char *const keys_66[] = {"name",     "code",    "pbp",     "id", "phy",
-				      "interval", "rtn",     "latency", "pd", "pa",
-				      "packing",  "framing", NULL};
+static const char *const keys_65[] = {
+	"name", "code",    "pbp",     "id",     "phy", "interval", "rtn", "latency", "iso", "pd",
+	"pa",   "packing", "framing", "preset", "bis", "lang",     "ctx", "program", NULL};
+static const char *const keys_66[] = {"name",    "code", "pbp", "id", "phy",     "interval", "rtn",
+				      "latency", "iso",  "pd",  "pa", "packing", "framing",  NULL};
 static const char *const flags_69[] = {"force", NULL};
 static const char *const flags_71[] = {"force", NULL};
 static const char *const keys_73[] = {"preset", "lang", "ctx", "program", NULL};
@@ -584,8 +583,8 @@ const struct cli_cmd cli_cmds[] = {
 	 .args_max = 1,
 	 .keys = keys_65,
 	 .flags = NULL,
-	 .usage = "[name=] [code=] [pbp=] [id=] [phy=] [interval=] [rtn=] [latency=] [pd=] [pa=] "
-		  "[packing=] [framing=] [preset=] [bis=] [lang=] [ctx=] [program=]",
+	 .usage = "[name=] [code=] [pbp=] [id=] [phy=] [interval=] [rtn=] [latency=] [iso=] [pd=] "
+		  "[pa=] [packing=] [framing=] [preset=] [bis=] [lang=] [ctx=] [program=]",
 	 .help = "New BIG (draft); with preset= or bis= also one subgroup and that many BISes. "
 		 "Refused if the BIG exists"},
 	{.path = "broadcast {big} set",
@@ -594,8 +593,8 @@ const struct cli_cmd cli_cmds[] = {
 	 .args_max = 1,
 	 .keys = keys_66,
 	 .flags = NULL,
-	 .usage = "[name=] [code=] [pbp=] [id=] [phy=] [interval=] [rtn=] [latency=] [pd=] [pa=] "
-		  "[packing=] [framing=]",
+	 .usage = "[name=] [code=] [pbp=] [id=] [phy=] [interval=] [rtn=] [latency=] [iso=] [pd=] "
+		  "[pa=] [packing=] [framing=]",
 	 .help = "Change BIG parameters (not while active)"},
 	{.path = "broadcast {big} delete",
 	 .handler = cmd_broadcast_delete,

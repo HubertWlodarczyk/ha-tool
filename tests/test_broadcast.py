@@ -247,3 +247,42 @@ def test_air_budget_over_broadcasts(pair):
     ha.cmd("broadcast 1 stop")
     ha.cmd("broadcast 2 start")  # alone: fine
     ha.wait_evt("broadcast_started", big=2, timeout=15)
+
+
+def test_mixed_frame_durations_on_common_iso_interval(pair):
+    """7.5 ms and 10 ms BIGs side by side without loss: with iso=30 the controller sends 4 resp. 3
+    SDUs per BIG event (BN), so both BIGs repeat every 30 ms and never meet (without it they
+    collide and are refused unless --force). The controller's schedule shows both at 30 ms."""
+    ha, dut = pair
+    ha.cmd("broadcast 1 create name=Fast preset=16_1 bis=2 rtn=1")
+    ha.cmd("broadcast 2 create name=Slow preset=16_2 bis=2 rtn=1")
+    ha.cmd("broadcast 1 start")
+    ha.wait_evt("broadcast_started", big=1, timeout=15)
+    rep = ha.cmd("broadcast 2 start", check=False)
+    assert rep.errno == -33 and "set iso=30" in rep.values["hint"]
+    ha.cmd("broadcast 1 stop")
+    ha.wait_evt("broadcast_stopped", big=1, timeout=15)
+
+    for b in (1, 2):
+        ha.cmd(f"broadcast {b} set iso=30")
+        show = ha.cmd(f"broadcast {b} show")
+        assert show["iso_interval_us"] == "30000" and show["bn"] == ("4" if b == 1 else "3")
+    m = ha.mark()
+    for b in (1, 2):
+        ha.cmd(f"broadcast {b} start")
+        ha.wait_evt("broadcast_started", big=b, timeout=15)
+    assert not [e for e in ha.events[m:] if e.name == "broadcast_warning"]
+    sched = ha.cmd("radio schedule")
+    assert [d["period_us"] for d in sched.data if d["role"] == "big"] == ["30000", "30000"]
+    assert sched["overlaps"] == "0"
+
+    for name in ("Fast", "Slow"):
+        m = dut.mark()
+        dut.cmd(f"bcast scan name={name}")
+        dut.wait_evt("dut_audio", since=m, src="bcast_bis2", timeout=SYNC_TIMEOUT)
+        for _ in range(3):
+            m = dut.mark()
+            for i in (1, 2):
+                ev = dut.wait_evt("dut_audio", since=m, src=f"bcast_bis{i}", timeout=10)
+                assert ev["lost"] == "0", (name, ev.raw)
+        dut.cmd("bcast stop")

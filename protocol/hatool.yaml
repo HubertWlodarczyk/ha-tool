@@ -478,6 +478,10 @@ commands:
     type: int
     range: [0, 15]
   - {name: latency, type: int}
+  - name: iso
+    type: enum
+    values: ['0', '15', '20', '30', '40']
+    doc: 'common ISO interval in ms through BN > 1 (sets the latency), 0: off'
   - {name: pd, type: int, unit: us}
   - {name: pa, type: int, unit: ms}
   - name: packing
@@ -523,6 +527,10 @@ commands:
     type: int
     range: [0, 15]
   - {name: latency, type: int}
+  - name: iso
+    type: enum
+    values: ['0', '15', '20', '30', '40']
+    doc: 'common ISO interval in ms through BN > 1 (sets the latency), 0: off'
   - {name: pd, type: int, unit: us}
   - {name: pa, type: int, unit: ms}
   - name: packing
@@ -552,7 +560,8 @@ commands:
     range: [1, 3]
     doc: BIG number
   reply: {big: int, state: str, broadcast_id: hex, name: str, encrypted: bool, pbp: str, subgroups: int,
-    bis: int, phy: str, interval_us: int, rtn: int, sdu: int, pa_ms: int, airtime_us: int, fits: bool}
+    bis: int, phy: str, interval_us: int, rtn: int, sdu: int, pa_ms: int, airtime_us: int, fits: bool,
+    bn: int, iso_interval_us: int}
   data:
     SUBGROUP: {sg: int, preset: str, rate: int, frame_us: int, octets: int, lang: str, ctx: str, program: str,
       bis: int}

@@ -54,6 +54,7 @@ struct tx_slot {
 	const uint8_t *frames; /* cycle of the tone, NULL: silence */
 	uint8_t nframes;
 	int16_t gain_delta; /* added to the global gain of every frame */
+	uint8_t depth;      /* SDUs in flight for this stream, 0: inflight_max() */
 	uint16_t seq_num;
 	uint32_t frame_count;
 	uint32_t sent_count;
@@ -301,10 +302,11 @@ static void tx_thread(void *p1, void *p2, void *p3)
 
 	while (true) {
 		k_mutex_lock(&slots_lock, K_FOREVER);
-		const int max = inflight_max();
+		const int dflt = inflight_max();
 
 		for (size_t i = 0; i < ARRAY_SIZE(slots); i++) {
 			struct tx_slot *slot = &slots[i];
+			const int max = slot->depth > 0U ? slot->depth : dflt;
 
 			while (inflight(slot) < max) {
 				const int before = inflight(slot);
@@ -392,6 +394,19 @@ int audio_tx_start(struct bt_cap_stream *stream, const struct tone *tone)
 	k_sem_give(&tx_sem);
 
 	return 0;
+}
+
+void audio_tx_set_depth(struct bt_cap_stream *stream, uint8_t depth)
+{
+	struct tx_slot *slot;
+
+	k_mutex_lock(&slots_lock, K_FOREVER);
+	slot = find_slot(stream);
+	if (slot != NULL) {
+		slot->depth = depth;
+	}
+	k_mutex_unlock(&slots_lock);
+	k_sem_give(&tx_sem);
 }
 
 void audio_tx_stop(struct bt_cap_stream *stream)

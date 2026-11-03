@@ -81,6 +81,7 @@ struct big_qos_override {
 	int latency_ms;
 	int pd_us;
 	int framing;
+	int iso_us; /* common ISO interval through BN > 1 (iso=), sets the latency */
 };
 
 struct big {
@@ -167,6 +168,14 @@ uint32_t big_airtime_us(const struct big *big, const struct bt_bap_qos_cfg *qos)
 uint32_t big_cost_us(uint32_t air_us, uint32_t interval_us);
 
 uint32_t budget_used_us(const struct big *except);
+
+/* Burst number the controller picks for this QoS (SDUs per BIG event): from the latency, as
+ * LE Create BIG does: max(latency / SDU interval, 2) - 1 for unframed PDUs
+ */
+uint32_t big_bn(const struct bt_bap_qos_cfg *qos);
+
+/* ISO interval of the BIG events: SDU interval x BN in whole 1.25 ms units */
+uint32_t big_iso_us(const struct bt_bap_qos_cfg *qos);
 
 /* Largest RTN the controller lays out in one BIG event of `big` (-1: not even RTN 0) */
 int big_ctlr_max_rtn(const struct big *big, const struct bt_bap_qos_cfg *qos);

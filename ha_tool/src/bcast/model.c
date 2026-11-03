@@ -137,6 +137,13 @@ void big_effective_qos(const struct big *big, struct bt_bap_qos_cfg *qos)
 		qos->framing = big->ovr.framing;
 	}
 
+	/* iso=: the latency that makes the controller send iso/interval SDUs per event (BN) */
+	if (big->ovr.iso_us > 0 && qos->interval > 0) {
+		const uint32_t bn = big->ovr.iso_us / qos->interval;
+
+		qos->latency = DIV_ROUND_UP((bn + 1U) * qos->interval, 1000U);
+	}
+
 	for (int i = 0; i < big->bis_count; i++) {
 		sdu = MAX(sdu, bis_octets(big, &big->bis[i]));
 	}
@@ -161,7 +168,7 @@ void big_init_draft(struct big *big, int number)
 	big->packing = BT_ISO_PACKING_SEQUENTIAL;
 	big->pa_ms = 60; /* BT_BAP_PER_ADV_PARAM_BROADCAST_FAST */
 	big->txpower = TXPOWER_DEFAULT;
-	big->ovr = (struct big_qos_override){-1, -1, -1, -1, -1, -1};
+	big->ovr = (struct big_qos_override){-1, -1, -1, -1, -1, -1, -1};
 
 	/* The memset cleared the stream callbacks */
 	for (int i = 0; i < MAX_BIS; i++) {

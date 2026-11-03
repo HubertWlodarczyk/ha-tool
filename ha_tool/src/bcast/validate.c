@@ -71,6 +71,15 @@ static int check_codecs(const struct shell *sh, const struct big *big,
 		}
 	}
 
+	if (big->ovr.iso_us > 0 &&
+	    (qos->framing == BT_BAP_QOS_CFG_FRAMING_FRAMED ||
+	     big->ovr.iso_us % qos->interval != 0 || big->ovr.iso_us / qos->interval < 2U ||
+	     big->ovr.iso_us / qos->interval > 7U)) {
+		return cli_err(sh, -EINVAL,
+			       "iso=%d ms is no multiple of 2..7 SDU intervals of %u us (unframed)",
+			       big->ovr.iso_us / 1000, qos->interval);
+	}
+
 	for (int i = 0; i < big->bis_count; i++) {
 		const struct bis *bis = &big->bis[i];
 		const uint32_t sdu_us = bis_sdu_interval_us(big, bis);
@@ -115,18 +124,47 @@ static int check_resources(const struct shell *sh, const struct big *big,
 
 		total += other->bis_count;
 
-		/* BIGs of different intervals meet every few events; with the controller's
+		/* BIGs of different ISO intervals meet every few events; with the controller's
 		 * reservation of air time + BIG_OVERHEAD_US per BIG they could only avoid each
 		 * other if their events and the advertising trains fit into the greatest common
-		 * divisor of the intervals (7.5 / 10 ms: 2.5 ms), i.e. practically never.
+		 * divisor of the intervals (7.5 / 10 ms: 2.5 ms), i.e. practically never. A common
+		 * ISO interval (iso=30: BN 4 for 7.5 ms, BN 3 for 10 ms) gives them one period.
 		 */
-		if (!force && other->qos.interval != qos->interval) {
+		if (!force && big_iso_us(&other->qos) != big_iso_us(qos)) {
+			char hint[96];
+
+			snprintf(hint, sizeof(hint),
+				 "broadcast %d stop; broadcast %d set iso=30; broadcast %d set "
+				 "iso=30",
+				 b + 1, b + 1, big_number(big));
+			return cli_err_hint(
+				sh, -EDOM, hint,
+				"BIG %d events every %u us but BIG %d every %u us: they collide "
+				"(frames lost); a common ISO interval (iso=) or --force",
+				big_number(big), big_iso_us(qos), b + 1, big_iso_us(&other->qos));
+		}
+	}
+
+	/* SDUs queued in the controller: 1 per BIS, BN for BIGs with BN > 1 (refilled right after
+	 * each event, long before the next one)
+	 */
+	{
+		uint32_t sdus = big->bis_count * big_bn(qos);
+
+		for (int b = 0; b < MAX_BIGS; b++) {
+			const struct big *o = &bcast_bigs[b];
+
+			if (o != big && o->state == BIG_STREAMING) {
+				sdus += o->bis_count * big_bn(&o->qos);
+			}
+		}
+
+		if (sdus > CONFIG_BT_ISO_TX_BUF_COUNT) {
 			return cli_err(
-				sh, -EDOM,
-				"interval_us=%u but BIG %d streams with %u: events of BIGs with "
-				"different intervals collide (frames lost); --force to start "
-				"anyway",
-				qos->interval, b + 1, other->qos.interval);
+				sh, -ENOMEM,
+				"%u SDUs would wait in the controller, it has %d ISO TX buffers "
+				"(fewer BISes or no iso=)",
+				sdus, CONFIG_BT_ISO_TX_BUF_COUNT);
 		}
 	}
 
@@ -157,7 +195,7 @@ static int check_resources(const struct shell *sh, const struct big *big,
 	}
 
 	air = big_airtime_us(big, qos);
-	if (budget_used_us(big) + big_cost_us(air, qos->interval) > budget_limit_us(big)) {
+	if (budget_used_us(big) + big_cost_us(air, big_iso_us(qos)) > budget_limit_us(big)) {
 		const uint32_t free_us =
 			budget_limit_us(big) - MIN(budget_used_us(big), budget_limit_us(big));
 
@@ -167,7 +205,7 @@ static int check_resources(const struct shell *sh, const struct big *big,
 		if (force) {
 			cli_evt("broadcast_warning",
 				"big=%d reason=over_budget airtime_us=%u cost_us=%u free_us=%u",
-				big_number(big), air, big_cost_us(air, qos->interval), free_us);
+				big_number(big), air, big_cost_us(air, big_iso_us(qos)), free_us);
 			return 0;
 		}
 
@@ -176,7 +214,7 @@ static int check_resources(const struct shell *sh, const struct big *big,
 			sh, -E2BIG, "broadcast budget",
 			"not enough air time: BIG %d needs %u us, %u us free (lower rtn=, "
 			"fewer BISes or a smaller preset)",
-			big_number(big), big_cost_us(air, qos->interval), free_us);
+			big_number(big), big_cost_us(air, big_iso_us(qos)), free_us);
 	}
 
 	return 0;

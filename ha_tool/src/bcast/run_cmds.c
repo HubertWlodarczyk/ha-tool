@@ -282,15 +282,17 @@ int cmd_broadcast_show(const struct shell *sh, size_t argc, char **argv)
 	cli_ok(sh,
 	       "big=%d state=%s broadcast_id=0x%06X name=%s encrypted=%d pbp=%s subgroups=%u "
 	       "bis=%u "
-	       "phy=%s interval_us=%u rtn=%u sdu=%u pa_ms=%u airtime_us=%u fits=%d",
+	       "phy=%s interval_us=%u rtn=%u sdu=%u pa_ms=%u airtime_us=%u fits=%d bn=%u "
+	       "iso_interval_us=%u",
 	       big_number(big), big_state_str(big), big->broadcast_id, CLI_Q(big->name),
 	       big->encrypted, pbp_str(big), big->sg_count, big->bis_count,
 	       qos.phy == BT_BAP_QOS_CFG_1M ? "1m" : "2m", qos.interval, qos.rtn, qos.sdu,
 	       big->pa_ms, air,
 	       qos.interval > 0 &&
-		       budget_used_us(big) + big_cost_us(air, qos.interval) <=
+		       budget_used_us(big) + big_cost_us(air, big_iso_us(&qos)) <=
 			       budget_limit_us(big) &&
-		       big_ctlr_max_rtn(big, &qos) >= (int)qos.rtn);
+		       big_ctlr_max_rtn(big, &qos) >= (int)qos.rtn,
+	       qos.interval > 0 ? big_bn(&qos) : 0U, qos.interval > 0 ? big_iso_us(&qos) : 0U);
 
 	return 0;
 }
@@ -405,7 +407,7 @@ int cmd_broadcast_budget(const struct shell *sh, size_t argc, char **argv)
 		}
 
 		air = big_airtime_us(big, &big->qos);
-		cost = big_cost_us(air, big->qos.interval);
+		cost = big_cost_us(air, big_iso_us(&big->qos));
 		if (human) {
 			shell_print(sh, "  BIG %d %-22s %s%%", b + 1, CLI_Q(big->name),
 				    pct(cost, p1, sizeof(p1)));

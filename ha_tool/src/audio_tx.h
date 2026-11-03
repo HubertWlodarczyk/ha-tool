@@ -51,6 +51,10 @@ int audio_tx_init(void);
  * the frame table
  */
 int audio_tx_start(struct bt_cap_stream *stream, const struct tone *tone);
+/* SDUs kept queued in the controller for this stream (BIGs with BN > 1 need BN: the BN SDUs of
+ * an event leave together); 0: the default policy
+ */
+void audio_tx_set_depth(struct bt_cap_stream *stream, uint8_t depth);
 void audio_tx_stop(struct bt_cap_stream *stream);
 void audio_tx_set_tone(struct bt_cap_stream *stream, const struct tone *tone);
 /* To be called from the stream's `sent` callback */

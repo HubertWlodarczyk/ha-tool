@@ -226,6 +226,8 @@ int parse_big_args(const struct shell *sh, struct big *big, size_t argc, char **
 	long latency = cli_kv_long(argc, argv, "latency", big->ovr.latency_ms, &err);
 	long pd = cli_kv_long(argc, argv, "pd", big->ovr.pd_us, &err);
 	long pa = cli_kv_long(argc, argv, "pa", big->pa_ms, &err);
+	const char *iso = cli_kv(argc, argv, "iso");
+	int iso_us = big->ovr.iso_us;
 
 	if (parse_interval(argc, argv, big->ovr.interval_us, &interval) != 0 || err != 0 ||
 	    id > 0xFFFFFF || rtn > 15 || latency > 4000 || pd > 0xFFFFFF || pa < 8 || pa > 10000 ||
@@ -233,6 +235,18 @@ int parse_big_args(const struct shell *sh, struct big *big, size_t argc, char **
 		return cli_err(sh, -EINVAL,
 			       "bad number (id<=0xFFFFFF interval=7.5|10 ms rtn<=15 "
 			       "pa=8..10000 ms in 1.25 ms steps)");
+	}
+
+	/* iso=: a common ISO interval in ms (0: off), a multiple of the SDU interval, BN <= 7 */
+	if (iso != NULL) {
+		if (strcmp(iso, "0") == 0) {
+			iso_us = -1;
+		} else if (strcmp(iso, "15") == 0 || strcmp(iso, "30") == 0 ||
+			   strcmp(iso, "20") == 0 || strcmp(iso, "40") == 0) {
+			iso_us = (int)strtol(iso, NULL, 10) * 1000;
+		} else {
+			return cli_err(sh, -EINVAL, "iso=0|15|20|30|40 (ms)");
+		}
 	}
 
 	if ((name != NULL && (strlen(name) == 0 || strlen(name) > NAME_MAX_LEN)) ||
@@ -288,6 +302,7 @@ int parse_big_args(const struct shell *sh, struct big *big, size_t argc, char **
 	big->ovr.rtn = rtn;
 	big->ovr.latency_ms = latency;
 	big->ovr.pd_us = pd;
+	big->ovr.iso_us = iso_us;
 
 	return 0;
 }

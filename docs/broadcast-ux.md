@@ -112,18 +112,21 @@ The tester should be able to prepare several BIGs independently, for example:
 
 ```text
 mode broadcast
-broadcast 1 create name="Music" phy=2m interval=10
+broadcast 1 create name="Music" phy=2m interval=10 iso=30
 broadcast 1 subgroup add preset=48_2 lang=pol ctx=media program="Music"
 broadcast 1 bis add subgroup=1 location=left freq=440
 broadcast 1 bis add subgroup=1 location=right freq=880
 
-broadcast 2 create name="Announcements" phy=1m interval=7.5
-broadcast 2 subgroup add preset=16_2 lang=pol ctx=instructional program="Announcements"
+broadcast 2 create name="Announcements" phy=1m interval=7.5 iso=30
+broadcast 2 subgroup add preset=16_1 lang=pol ctx=instructional program="Announcements"
 broadcast 2 bis add subgroup=1 location=mono freq=1000
 
 broadcast 1 start
 broadcast 2 start
 ```
+
+7.5 ms and 10 ms BIGs would meet every few events; `iso=30` gives both a 30 ms ISO interval (4
+and 3 SDUs per event), so they never do, at about 20 ms more latency.
 
 It matters that the user can set different BIG, subgroup and BIS parameters
 and start them independently. `broadcast start --all` is only a bulk
@@ -406,6 +409,7 @@ BIG parameters:
 | `interval` | SDU/BIG interval in ms: `7.5` or `10` |
 | `rtn` | number of retransmissions |
 | `latency` | maximum transport latency in ms |
+| `iso` | common ISO interval in ms (`15`, `20`, `30`, `40`; `0` off): several SDUs per BIG event, so BIGs of 7.5 and 10 ms frames can run side by side (`iso=30` on both); sets the latency |
 | `pd` | presentation delay in µs |
 | `pa` | periodic advertising interval in ms (8–10000, 1.25 ms step) |
 | `packing` | `seq` or `int` |

@@ -41,6 +41,20 @@
  * the same Max_PDU), each plus the subevent spacing (T_MSS). Framed PDUs (44.1 kHz) carry a
  * 5 octet segmentation header.
  */
+uint32_t big_bn(const struct bt_bap_qos_cfg *qos)
+{
+	if (qos->framing == BT_BAP_QOS_CFG_FRAMING_FRAMED || qos->interval == 0U) {
+		return 1U;
+	}
+
+	return MIN(MAX((uint32_t)qos->latency * 1000U / qos->interval, 2U) - 1U, 7U);
+}
+
+uint32_t big_iso_us(const struct bt_bap_qos_cfg *qos)
+{
+	return qos->interval * big_bn(qos) / 1250U * 1250U;
+}
+
 uint32_t big_airtime_us(const struct big *big, const struct bt_bap_qos_cfg *qos)
 {
 	const uint32_t us_per_byte = qos->phy == BT_BAP_QOS_CFG_2M ? 4U : 8U;
@@ -54,7 +68,9 @@ uint32_t big_airtime_us(const struct big *big, const struct bt_bap_qos_cfg *qos)
 	max_pdu += (qos->framing == BT_BAP_QOS_CFG_FRAMING_FRAMED ? 5U : 0U) +
 		   (big->encrypted ? 4U : 0U);
 
-	return big->bis_count * (qos->rtn + 1U) * ((max_pdu + overhead) * us_per_byte + 150U);
+	/* BN > 1: every BIS sends BN x (RTN+1) subevents per (longer) ISO interval */
+	return big->bis_count * big_bn(qos) * (qos->rtn + 1U) *
+	       ((max_pdu + overhead) * us_per_byte + 150U);
 }
 
 /*
@@ -107,7 +123,7 @@ int big_ctlr_max_rtn(const struct big *big, const struct bt_bap_qos_cfg *qos)
 	/* The ISO interval is a whole number of 1.25 ms: 44.1 kHz (framed, SDU every 10884 us)
 	 * gets 10 ms events
 	 */
-	const uint32_t iso_interval = qos->interval / 1250U * 1250U;
+	const uint32_t iso_interval = big_iso_us(qos);
 	struct bt_bap_qos_cfg q = *qos;
 	int best = -1;
 
@@ -142,7 +158,7 @@ uint32_t budget_used_us(const struct big *except)
 
 		if (other != except && other->state == BIG_STREAMING) {
 			used += big_cost_us(big_airtime_us(other, &other->qos),
-					    other->qos.interval);
+					    big_iso_us(&other->qos));
 		}
 	}
 
@@ -204,7 +220,7 @@ int budget_fit_bis(const struct bt_bap_qos_cfg *qos, const struct bt_bap_lc3_pre
 	probe.encrypted = encrypted;
 	for (int n = 1; n <= max_n; n++) {
 		probe.bis_count = n;
-		if (big_cost_us(big_airtime_us(&probe, qos), qos->interval) > free_us ||
+		if (big_cost_us(big_airtime_us(&probe, qos), big_iso_us(qos)) > free_us ||
 		    big_ctlr_max_rtn(&probe, qos) < (int)qos->rtn) {
 			break;
 		}
@@ -227,12 +243,12 @@ void warn_interval_mix(const struct big *big)
 		const struct big *other = &bcast_bigs[b];
 
 		if (other != big && other->state == BIG_STREAMING &&
-		    other->qos.interval != big->qos.interval) {
+		    big_iso_us(&other->qos) != big_iso_us(&big->qos)) {
 			cli_evt("broadcast_warning",
 				"big=%d reason=interval_mix other=%d interval_us=%u other_us=%u "
 				"airtime_us=%u other_airtime_us=%u",
-				big_number(big), big_number(other), big->qos.interval,
-				other->qos.interval, big_airtime_us(big, &big->qos),
+				big_number(big), big_number(other), big_iso_us(&big->qos),
+				big_iso_us(&other->qos), big_airtime_us(big, &big->qos),
 				big_airtime_us(other, &other->qos));
 		}
 	}

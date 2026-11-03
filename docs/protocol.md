@@ -686,7 +686,7 @@ Reply: `count` (int), `restarted` (int)
 
 Data `RESULT`: `big` (int), `name` (str), `result` (str), `errno` (int), `reason` (str)
 
-### `broadcast <big> create [name=] [code=] [pbp=] [id=] [phy=] [interval=] [rtn=] [latency=] [pd=] [pa=] [packing=] [framing=] [preset=] [bis=] [lang=] [ctx=] [program=]`
+### `broadcast <big> create [name=] [code=] [pbp=] [id=] [phy=] [interval=] [rtn=] [latency=] [iso=] [pd=] [pa=] [packing=] [framing=] [preset=] [bis=] [lang=] [ctx=] [program=]`
 
 New BIG (draft); with preset= or bis= also one subgroup and that many BISes. Refused if the BIG exists
 
@@ -703,6 +703,7 @@ Mode: `broadcast`
 | `interval=` | enum | 7.5\|10; ms |
 | `rtn=` | int | 0..15 |
 | `latency=` | int |  |
+| `iso=` | enum | 0\|15\|20\|30\|40; common ISO interval in ms through BN > 1 (sets the latency), 0: off |
 | `pd=` | int | us |
 | `pa=` | int | ms |
 | `packing=` | enum | seq\|int |
@@ -715,7 +716,7 @@ Mode: `broadcast`
 
 Reply: `big` (int), `state` (str), `broadcast_id` (hex), `name` (str), `subgroups` (int), `bis` (int), `encrypted` (bool), `pbp` (str)
 
-### `broadcast <big> set [name=] [code=] [pbp=] [id=] [phy=] [interval=] [rtn=] [latency=] [pd=] [pa=] [packing=] [framing=]`
+### `broadcast <big> set [name=] [code=] [pbp=] [id=] [phy=] [interval=] [rtn=] [latency=] [iso=] [pd=] [pa=] [packing=] [framing=]`
 
 Change BIG parameters (not while active)
 
@@ -732,6 +733,7 @@ Mode: `broadcast`
 | `interval=` | enum | 7.5\|10; ms |
 | `rtn=` | int | 0..15 |
 | `latency=` | int |  |
+| `iso=` | enum | 0\|15\|20\|30\|40; common ISO interval in ms through BN > 1 (sets the latency), 0: off |
 | `pd=` | int | us |
 | `pa=` | int | ms |
 | `packing=` | enum | seq\|int |
@@ -761,7 +763,7 @@ Mode: `broadcast`
 |---|---|---|
 | `big (positional)` | int | 1..3; BIG number |
 
-Reply: `big` (int), `state` (str), `broadcast_id` (hex), `name` (str), `encrypted` (bool), `pbp` (str), `subgroups` (int), `bis` (int), `phy` (str), `interval_us` (int), `rtn` (int), `sdu` (int), `pa_ms` (int), `airtime_us` (int), `fits` (bool)
+Reply: `big` (int), `state` (str), `broadcast_id` (hex), `name` (str), `encrypted` (bool), `pbp` (str), `subgroups` (int), `bis` (int), `phy` (str), `interval_us` (int), `rtn` (int), `sdu` (int), `pa_ms` (int), `airtime_us` (int), `fits` (bool), `bn` (int), `iso_interval_us` (int)
 
 Data `SUBGROUP`: `sg` (int), `preset` (str), `rate` (int), `frame_us` (int), `octets` (int), `lang` (str), `ctx` (str), `program` (str), `bis` (int)
 

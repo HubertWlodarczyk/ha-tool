@@ -341,7 +341,9 @@ public final class Protocol {
                 "sdu", "int",
                 "pa_ms", "int",
                 "airtime_us", "int",
-                "fits", "bool"));
+                "fits", "bool",
+                "bn", "int",
+                "iso_interval_us", "int"));
         m.put("broadcast start", map("big", "int", "state", "str", "broadcast_id", "hex"));
         m.put("broadcast stop", map("big", "int", "state", "str"));
         m.put("broadcast restart", map("big", "int", "state", "str", "broadcast_id", "hex"));

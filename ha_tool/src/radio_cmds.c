@@ -31,7 +31,8 @@
 
 static const char *role_name(uint8_t role)
 {
-	static const char *const names[] = {"other", "adv", "aux", "pa", "big", "scan", "acl", "cig"};
+	static const char *const names[] = {"other", "adv",  "aux", "pa",
+					    "big",   "scan", "acl", "cig"};
 
 	return role < ARRAY_SIZE(names) ? names[role] : "other";
 }
@@ -88,7 +89,8 @@ static int count_overlaps(const struct bt_hci_vs_sched_entry *e, int n)
 						break;
 					}
 
-					overlaps += sa < sb + e[b].slot_us && sb < sa + e[a].slot_us;
+					overlaps +=
+						sa < sb + e[b].slot_us && sb < sa + e[a].slot_us;
 				}
 			}
 		}
@@ -102,8 +104,9 @@ static void timeline(const struct shell *sh, const struct bt_hci_vs_sched_entry 
 	char line[COLUMNS + 1];
 	uint8_t used[COLUMNS] = {0};
 
-	shell_print(sh, "Timeline of %u ms, one column = %u us (A adv, X aux, P pa, B big, S scan, "
-			"L acl, C cig; * two roles at once):",
+	shell_print(sh,
+		    "Timeline of %u ms, one column = %u us (A adv, X aux, P pa, B big, S scan, "
+		    "L acl, C cig; * two roles at once):",
 		    WINDOW_US / 1000U, COLUMN_US);
 	for (int r = 0; r < n; r++) {
 		memset(line, '.', COLUMNS);

@@ -67,6 +67,13 @@ public final class BroadcastSetOptions {
         return this;
     }
 
+    /** iso; 0|15|20|30|40; common ISO interval in ms through BN > 1 (sets the latency), 0: off */
+    public BroadcastSetOptions iso(String v) {
+        Check.oneOf("iso", v, "0", "15", "20", "30", "40");
+        keys.put("iso", v);
+        return this;
+    }
+
     /** pd; us */
     public BroadcastSetOptions pd(int v) {
         keys.put("pd", v);

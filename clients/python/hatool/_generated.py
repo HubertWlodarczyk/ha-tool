@@ -168,7 +168,9 @@ REPLIES: dict[str, dict[str, str]] = {'bonding create': {'id': 'int', 'name': 's
                     'sdu': 'int',
                     'pa_ms': 'int',
                     'airtime_us': 'int',
-                    'fits': 'bool'},
+                    'fits': 'bool',
+                    'bn': 'int',
+                    'iso_interval_us': 'int'},
  'broadcast start': {'big': 'int', 'state': 'str', 'broadcast_id': 'hex'},
  'broadcast stop': {'big': 'int', 'state': 'str'},
  'broadcast restart': {'big': 'int', 'state': 'str', 'broadcast_id': 'hex'},
@@ -1267,6 +1269,7 @@ class _Broadcast:
         interval: str | None = None,
         rtn: int | None = None,
         latency: int | None = None,
+        iso: str | None = None,
         pd: int | None = None,
         pa: int | None = None,
         packing: str | None = None,
@@ -1285,6 +1288,7 @@ class _Broadcast:
         phy: 1m|2m
         interval: 7.5|10, ms
         rtn: 0..15
+        iso: 0|15|20|30|40, common ISO interval in ms through BN > 1 (sets the latency), 0: off
         pd: us
         pa: ms
         packing: seq|int
@@ -1300,13 +1304,14 @@ class _Broadcast:
         _enum("pbp", pbp, ("sq", "hq", "off"))
         _enum("phy", phy, ("1m", "2m"))
         _enum("interval", interval, ("7.5", "10"))
+        _enum("iso", iso, ("0", "15", "20", "30", "40"))
         _enum("packing", packing, ("seq", "int"))
         _enum("framing", framing, ("unframed", "framed"))
         _enum("ctx", ctx, ("media", "live", "conversational", "instructional", "sound_effects", "notifications", "alerts", "emergency", "unspecified"))
         return self._c.call(
             f"broadcast {big} create",
             [],
-            {"name": name, "code": code, "pbp": pbp, "id": id, "phy": phy, "interval": interval, "rtn": rtn, "latency": latency, "pd": pd, "pa": pa, "packing": packing, "framing": framing, "preset": preset, "bis": bis, "lang": lang, "ctx": ctx, "program": program},
+            {"name": name, "code": code, "pbp": pbp, "id": id, "phy": phy, "interval": interval, "rtn": rtn, "latency": latency, "iso": iso, "pd": pd, "pa": pa, "packing": packing, "framing": framing, "preset": preset, "bis": bis, "lang": lang, "ctx": ctx, "program": program},
             timeout=reply_timeout,
         )
 
@@ -1322,6 +1327,7 @@ class _Broadcast:
         interval: str | None = None,
         rtn: int | None = None,
         latency: int | None = None,
+        iso: str | None = None,
         pd: int | None = None,
         pa: int | None = None,
         packing: str | None = None,
@@ -1334,6 +1340,7 @@ class _Broadcast:
         phy: 1m|2m
         interval: 7.5|10, ms
         rtn: 0..15
+        iso: 0|15|20|30|40, common ISO interval in ms through BN > 1 (sets the latency), 0: off
         pd: us
         pa: ms
         packing: seq|int
@@ -1343,12 +1350,13 @@ class _Broadcast:
         _enum("pbp", pbp, ("sq", "hq", "off"))
         _enum("phy", phy, ("1m", "2m"))
         _enum("interval", interval, ("7.5", "10"))
+        _enum("iso", iso, ("0", "15", "20", "30", "40"))
         _enum("packing", packing, ("seq", "int"))
         _enum("framing", framing, ("unframed", "framed"))
         return self._c.call(
             f"broadcast {big} set",
             [],
-            {"name": name, "code": code, "pbp": pbp, "id": id, "phy": phy, "interval": interval, "rtn": rtn, "latency": latency, "pd": pd, "pa": pa, "packing": packing, "framing": framing},
+            {"name": name, "code": code, "pbp": pbp, "id": id, "phy": phy, "interval": interval, "rtn": rtn, "latency": latency, "iso": iso, "pd": pd, "pa": pa, "packing": packing, "framing": framing},
             timeout=reply_timeout,
         )
 
@@ -1363,7 +1371,7 @@ class _Broadcast:
         tree
         Reply: big (int), state (str), broadcast_id (hex), name (str), encrypted (bool), pbp (str),
         subgroups (int), bis (int), phy (str), interval_us (int), rtn (int), sdu (int), pa_ms (int),
-        airtime_us (int), fits (bool)
+        airtime_us (int), fits (bool), bn (int), iso_interval_us (int)
         """
         return self._c.call(f"broadcast {big} show", [], {}, timeout=reply_timeout)
 

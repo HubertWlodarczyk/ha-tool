@@ -295,7 +295,7 @@ states: `draft` (incomplete), `ready` (at least one subgroup and one BIS), `acti
 
 | Command | Description |
 |---|---|
-| `broadcast <n> create [name=] [code=] [pbp=] [id=] [phy=] [interval=7.5\|10] [rtn=] [latency=] [pd=] [pa=] [packing=] [framing=] [preset=] [bis=N] [lang=] [ctx=] [program=]` | New BIG (draft). With `preset=` or `bis=`, one subgroup and N BISes right away (mono, L/R, L/R/C ...), tones 500, 1000, 1500 ... Hz. Existing BIG: `ERR -17 hint="broadcast <n> delete"`. |
+| `broadcast <n> create [name=] [code=] [pbp=] [id=] [phy=] [interval=7.5\|10] [rtn=] [latency=] [pd=] [pa=] [iso=0\|15\|20\|30\|40] [packing=] [framing=] [preset=] [bis=N] [lang=] [ctx=] [program=]` | New BIG (draft). With `preset=` or `bis=`, one subgroup and N BISes right away (mono, L/R, L/R/C ...), tones 500, 1000, 1500 ... Hz. Existing BIG: `ERR -17 hint="broadcast <n> delete"`. |
 | `broadcast <n> set ...`, `broadcast <n> delete` | Change BIG parameters (not while transmitting); delete. |
 | `broadcast <n> subgroup add\|set <sg>\|delete <sg>\|list` | Subgroups. `set` on an active BIG changes only `lang`, `ctx`, `program` (one subgroup: a Zephyr API limitation). `delete` only without BISes; numbers stay contiguous. |
 | `broadcast <n> bis add\|set <bis>\|delete <bis>\|list` | BISes: `subgroup=`, `location=mono\|left\|right\|front_center\|back_left\|back_right\|side_left\|side_right`, `rate=`, `octets=`, `freq=`, `exact=1`, `level=-40..-2`, `pattern=cont\|ring\|beep`. The reply gives `cfg`, `freq_actual` and `level_actual`; a combination outside the LC3 table is `ERR -95` with a list. |
@@ -434,8 +434,17 @@ in plain text, but not encrypted (test).
 **BIGs with different intervals** (7.5 and 10 ms) meet every few events. They could avoid it only
 if their events together fit into the GCD of the intervals (2.5 ms), while the overhead alone is
 about 1 ms per BIG plus its airtime. Measured losses: 25–40% of one of them. That is why
-`broadcast <n> start` refuses by default, and `--force` is a deliberate loss-tolerance test.
-Different frame durations are therefore tested one after another, or side by side with `--force`.
+`broadcast <n> start` refuses by default, with the way out as a hint.
+
+**A common ISO interval** (`iso=30`) puts them on one period. The controller sends several SDUs
+per BIG event (BN = latency / SDU interval − 1, LE Create BIG), so the tool sets the latency that
+gives 4 SDUs of 7.5 ms or 3 SDUs of 10 ms per 30 ms event. Both BIGs then repeat every 30 ms and
+never meet: measured without loss, and `radio schedule` shows both at 30 ms (test). The cost is
+latency, about 20 ms more. `show` reports `bn` and `iso_interval_us`. The airtime, budget and
+controller checks count BN × (RTN+1) subevents per ISO interval. The controller has to hold BN
+SDUs per BIS (one ISO TX buffer each, 17 in total), so `start` refuses a combination that needs
+more. `--force` still starts BIGs of different ISO intervals side by side, as a deliberate
+loss-tolerance test.
 
 Example: a bilingual broadcast in which one BIS has a different sampling rate and frame size.
 
