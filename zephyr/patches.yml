@@ -122,3 +122,13 @@ patches:
     email: hubert.wlodarczyk.pl@gmail.com
     date: 2026-11-02
     upstreamable: true
+  # Vendor command Read Schedule: the running roles as the controller's ticker has them (next
+  # event, period, reserved slot), so the host can show and check the real phases instead of
+  # modelling them ('radio schedule', scripts/capacity.py).
+  - path: zephyr/0013-controller-vs-read-schedule.patch
+    sha256sum: b29fa75db2dbf363b0feb8379ca50368c920f96d67aa7aea8314ff311e6368dd
+    module: zephyr
+    author: Hubert Włodarczyk
+    email: hubert.wlodarczyk.pl@gmail.com
+    date: 2026-11-03
+    upstreamable: true

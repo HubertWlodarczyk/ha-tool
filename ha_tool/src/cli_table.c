@@ -23,29 +23,29 @@ static const char *const keys_20[] = {"preset", "freq", NULL};
 static const char *const keys_22[] = {"uri", "name", "ring_freq", "call_freq", "call_preset", NULL};
 static const char *const keys_23[] = {"uri", "call_freq", "call_preset", NULL};
 static const char *const keys_29[] = {"ms", "freq", NULL};
-static const char *const flags_46[] = {"verbose", NULL};
-static const char *const flags_47[] = {"yes", NULL};
-static const char *const flags_49[] = {"verbose", NULL};
-static const char *const keys_58[] = {"n", NULL};
-static const char *const keys_60[] = {"preset", "rtn", "phy", "enc", NULL};
-static const char *const flags_61[] = {"all", "force", NULL};
-static const char *const flags_62[] = {"all", NULL};
-static const char *const flags_63[] = {"all", "force", NULL};
-static const char *const keys_64[] = {"name",   "code",    "pbp",  "id",  "phy",     "interval",
+static const char *const flags_47[] = {"verbose", NULL};
+static const char *const flags_48[] = {"yes", NULL};
+static const char *const flags_50[] = {"verbose", NULL};
+static const char *const keys_59[] = {"n", NULL};
+static const char *const keys_61[] = {"preset", "rtn", "phy", "enc", NULL};
+static const char *const flags_62[] = {"all", "force", NULL};
+static const char *const flags_63[] = {"all", NULL};
+static const char *const flags_64[] = {"all", "force", NULL};
+static const char *const keys_65[] = {"name",   "code",    "pbp",  "id",  "phy",     "interval",
 				      "rtn",    "latency", "pd",   "pa",  "packing", "framing",
 				      "preset", "bis",     "lang", "ctx", "program", NULL};
-static const char *const keys_65[] = {"name",     "code",    "pbp",     "id", "phy",
+static const char *const keys_66[] = {"name",     "code",    "pbp",     "id", "phy",
 				      "interval", "rtn",     "latency", "pd", "pa",
 				      "packing",  "framing", NULL};
-static const char *const flags_68[] = {"force", NULL};
-static const char *const flags_70[] = {"force", NULL};
-static const char *const keys_72[] = {"preset", "lang", "ctx", "program", NULL};
+static const char *const flags_69[] = {"force", NULL};
+static const char *const flags_71[] = {"force", NULL};
 static const char *const keys_73[] = {"preset", "lang", "ctx", "program", NULL};
-static const char *const keys_76[] = {"subgroup", "location", "rate",    "octets", "freq",
-				      "exact",    "level",    "pattern", NULL};
+static const char *const keys_74[] = {"preset", "lang", "ctx", "program", NULL};
 static const char *const keys_77[] = {"subgroup", "location", "rate",    "octets", "freq",
 				      "exact",    "level",    "pattern", NULL};
-static const char *const keys_78[] = {"freq", "exact", "level", "pattern", NULL};
+static const char *const keys_78[] = {"subgroup", "location", "rate",    "octets", "freq",
+				      "exact",    "level",    "pattern", NULL};
+static const char *const keys_79[] = {"freq", "exact", "level", "pattern", NULL};
 
 const struct cli_cmd cli_cmds[] = {
 	{.path = "bonding create",
@@ -412,6 +412,16 @@ const struct cli_cmd cli_cmds[] = {
 	 .flags = NULL,
 	 .usage = "[<words...>]",
 	 .help = "Commands under a prefix (all without one), with usage and description"},
+	{.path = "radio schedule",
+	 .handler = cmd_radio_schedule,
+	 .args_min = 0,
+	 .args_max = 0,
+	 .keys = NULL,
+	 .flags = NULL,
+	 .usage = "",
+	 .help = "Running roles of the controller (vendor Read Schedule, Zephyr patch 0013): next "
+		 "event, period and reserved slot of each, and reservations that overlap within 60 "
+		 "ms; proto human: a timeline"},
 	{.path = "version",
 	 .handler = cmd_version,
 	 .args_min = 0,
@@ -425,7 +435,7 @@ const struct cli_cmd cli_cmds[] = {
 	 .args_min = 0,
 	 .args_max = 0,
 	 .keys = NULL,
-	 .flags = flags_46,
+	 .flags = flags_47,
 	 .usage = "[--verbose]",
 	 .help = "Overall state, layer by layer (--verbose: counters)"},
 	{.path = "reset",
@@ -433,7 +443,7 @@ const struct cli_cmd cli_cmds[] = {
 	 .args_min = 0,
 	 .args_max = 0,
 	 .keys = NULL,
-	 .flags = flags_47,
+	 .flags = flags_48,
 	 .usage = "[--yes]",
 	 .help = "Back to the start: stop everything, delete identities, bonds and broadcasts, no "
 		 "mode (proto human needs --yes)"},
@@ -450,7 +460,7 @@ const struct cli_cmd cli_cmds[] = {
 	 .args_min = 0,
 	 .args_max = 1,
 	 .keys = NULL,
-	 .flags = flags_49,
+	 .flags = flags_50,
 	 .usage = "[<format>] [--verbose]",
 	 .help = "output format: text (k=v), json (JSON Lines for libraries), human (text with "
 		 "echo and prompt)"},
@@ -522,7 +532,7 @@ const struct cli_cmd cli_cmds[] = {
 	 .handler = cmd_cli_burst,
 	 .args_min = 0,
 	 .args_max = 0,
-	 .keys = keys_58,
+	 .keys = keys_59,
 	 .flags = NULL,
 	 .usage = "[n=]",
 	 .help = "Diagnostic: n events at once, to check that the host keeps up (losses: dropped "
@@ -539,7 +549,7 @@ const struct cli_cmd cli_cmds[] = {
 	 .handler = cmd_broadcast_budget,
 	 .args_min = 0,
 	 .args_max = 0,
-	 .keys = keys_60,
+	 .keys = keys_61,
 	 .flags = NULL,
 	 .usage = "[preset=] [rtn=] [phy=] [enc=]",
 	 .help = "Air time used by the active BIGs (also in percent of the 10 ms period) and the "
@@ -549,7 +559,7 @@ const struct cli_cmd cli_cmds[] = {
 	 .args_min = 0,
 	 .args_max = 0,
 	 .keys = NULL,
-	 .flags = flags_61,
+	 .flags = flags_62,
 	 .usage = "[--all] [--force]",
 	 .help = "Start every configured BIG; one RESULT line each, ERR if any failed"},
 	{.path = "broadcast stop",
@@ -557,7 +567,7 @@ const struct cli_cmd cli_cmds[] = {
 	 .args_min = 0,
 	 .args_max = 0,
 	 .keys = NULL,
-	 .flags = flags_62,
+	 .flags = flags_63,
 	 .usage = "[--all]",
 	 .help = "Stop every BIG (configuration kept)"},
 	{.path = "broadcast restart",
@@ -565,14 +575,14 @@ const struct cli_cmd cli_cmds[] = {
 	 .args_min = 0,
 	 .args_max = 0,
 	 .keys = NULL,
-	 .flags = flags_63,
+	 .flags = flags_64,
 	 .usage = "[--all] [--force]",
 	 .help = "Restart every configured BIG"},
 	{.path = "broadcast {big} create",
 	 .handler = cmd_broadcast_create,
 	 .args_min = 1,
 	 .args_max = 1,
-	 .keys = keys_64,
+	 .keys = keys_65,
 	 .flags = NULL,
 	 .usage = "[name=] [code=] [pbp=] [id=] [phy=] [interval=] [rtn=] [latency=] [pd=] [pa=] "
 		  "[packing=] [framing=] [preset=] [bis=] [lang=] [ctx=] [program=]",
@@ -582,7 +592,7 @@ const struct cli_cmd cli_cmds[] = {
 	 .handler = cmd_broadcast_set,
 	 .args_min = 1,
 	 .args_max = 1,
-	 .keys = keys_65,
+	 .keys = keys_66,
 	 .flags = NULL,
 	 .usage = "[name=] [code=] [pbp=] [id=] [phy=] [interval=] [rtn=] [latency=] [pd=] [pa=] "
 		  "[packing=] [framing=]",
@@ -609,7 +619,7 @@ const struct cli_cmd cli_cmds[] = {
 	 .args_min = 1,
 	 .args_max = 1,
 	 .keys = NULL,
-	 .flags = flags_68,
+	 .flags = flags_69,
 	 .usage = "[--force]",
 	 .help = "Start the BIG (result: broadcast_started)"},
 	{.path = "broadcast {big} stop",
@@ -625,7 +635,7 @@ const struct cli_cmd cli_cmds[] = {
 	 .args_min = 1,
 	 .args_max = 1,
 	 .keys = NULL,
-	 .flags = flags_70,
+	 .flags = flags_71,
 	 .usage = "[--force]",
 	 .help = "Stop and start the BIG"},
 	{.path = "broadcast {big} txpower",
@@ -640,7 +650,7 @@ const struct cli_cmd cli_cmds[] = {
 	 .handler = cmd_broadcast_subgroup_add,
 	 .args_min = 1,
 	 .args_max = 1,
-	 .keys = keys_72,
+	 .keys = keys_73,
 	 .flags = NULL,
 	 .usage = "[preset=] [lang=] [ctx=] [program=]",
 	 .help = "Add a subgroup: base codec configuration and metadata"},
@@ -648,7 +658,7 @@ const struct cli_cmd cli_cmds[] = {
 	 .handler = cmd_broadcast_subgroup_set,
 	 .args_min = 2,
 	 .args_max = 2,
-	 .keys = keys_73,
+	 .keys = keys_74,
 	 .flags = NULL,
 	 .usage = "<subgroup> [preset=] [lang=] [ctx=] [program=]",
 	 .help = "Change a subgroup; live only lang, ctx and program of a BIG with one subgroup"},
@@ -672,7 +682,7 @@ const struct cli_cmd cli_cmds[] = {
 	 .handler = cmd_broadcast_bis_add,
 	 .args_min = 1,
 	 .args_max = 1,
-	 .keys = keys_76,
+	 .keys = keys_77,
 	 .flags = NULL,
 	 .usage = "[subgroup=] [location=] [rate=] [octets=] [freq=] [exact=] [level=] [pattern=]",
 	 .help = "Add a BIS: subgroup, channel, codec overrides, tone (reply: nearest tone of the "
@@ -681,7 +691,7 @@ const struct cli_cmd cli_cmds[] = {
 	 .handler = cmd_broadcast_bis_set,
 	 .args_min = 2,
 	 .args_max = 2,
-	 .keys = keys_77,
+	 .keys = keys_78,
 	 .flags = NULL,
 	 .usage = "<bis> [subgroup=] [location=] [rate=] [octets=] [freq=] [exact=] [level=] "
 		  "[pattern=]",
@@ -690,7 +700,7 @@ const struct cli_cmd cli_cmds[] = {
 	 .handler = cmd_broadcast_bis_tone,
 	 .args_min = 2,
 	 .args_max = 2,
-	 .keys = keys_78,
+	 .keys = keys_79,
 	 .flags = NULL,
 	 .usage = "<bis> [freq=] [exact=] [level=] [pattern=]",
 	 .help = "Tone of a BIS, also live (reply: the tone actually sent)"},
@@ -816,6 +826,16 @@ static const struct shell_static_entry cli_root_proto = {
 };
 static const TYPE_SECTION_ITERABLE(union shell_cmd_entry, shell_cmd_proto, shell_root_cmds,
 				   shell_cmd_proto) = {.entry = &cli_root_proto};
+
+static const struct shell_static_entry cli_root_radio = {
+	.syntax = "radio",
+	.help = "radio",
+	.subcmd = NULL,
+	.handler = cli_dispatch,
+	.args = {.mandatory = 1, .optional = SHELL_OPT_ARG_CHECK_SKIP},
+};
+static const TYPE_SECTION_ITERABLE(union shell_cmd_entry, shell_cmd_radio, shell_root_cmds,
+				   shell_cmd_radio) = {.entry = &cli_root_radio};
 
 static const struct shell_static_entry cli_root_reset = {
 	.syntax = "reset",

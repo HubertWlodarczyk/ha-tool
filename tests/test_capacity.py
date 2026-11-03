@@ -93,6 +93,25 @@ def test_largest_sdu_in_one_pdu(tool):
     assert not [e for e in tool.events[m:] if e.name == "broadcast_warning"], tool.events[m:]
 
 
+def test_radio_schedule_shows_the_phases(pair):
+    """The controller's own schedule (patch 0013): with two BIGs it reports both BIGs, both PA
+    trains and both AUX sets with their periods, and patch 0006 has placed them without any
+    overlapping reservation."""
+    ha, _ = pair
+    assert ha.cmd("radio schedule")["count"] == "0"
+    create_big(ha, 1, 4)
+    create_big(ha, 2, 3, code="Sched2")
+    for b in (1, 2):
+        ha.cmd(f"broadcast {b} start")
+        ha.wait_evt("broadcast_started", big=b, timeout=15)
+    rep = ha.cmd("radio schedule")
+    roles = sorted(d["role"] for d in rep.data if d["role"] != "adv")
+    assert roles == ["aux", "aux", "big", "big", "pa", "pa"], rep.data
+    assert {d["period_us"] for d in rep.data if d["role"] == "big"} == {"10000"}
+    assert {d["period_us"] for d in rep.data if d["role"] == "pa"} == {"60000"}
+    assert rep["overlaps"] == "0", rep.data
+
+
 def start_bigs(ha, cfg: tuple[int, ...]) -> None:
     for b, n in enumerate(cfg, start=1):
         create_big(ha, b, n, code=None if b == 1 else f"Edge{b}")

@@ -1,0 +1,325 @@
+diff --git a/include/zephyr/bluetooth/hci_vs.h b/include/zephyr/bluetooth/hci_vs.h
+--- a/include/zephyr/bluetooth/hci_vs.h
++++ b/include/zephyr/bluetooth/hci_vs.h
+@@ -204,6 +204,36 @@
+ 	int8_t  tx_power_level;
+ } __packed;
+ 
++/* Read Schedule: the controller's running roles as its ticker has them (next event relative to
++ * the moment of the command, period and reserved slot), for host-side admission and diagnosis
++ */
++#define BT_HCI_OP_VS_READ_SCHEDULE              BT_OP(BT_OGF_VS, 0x0150)
++
++#define BT_HCI_VS_SCHED_ROLE_OTHER 0x00
++#define BT_HCI_VS_SCHED_ROLE_ADV   0x01
++#define BT_HCI_VS_SCHED_ROLE_AUX   0x02
++#define BT_HCI_VS_SCHED_ROLE_PA    0x03
++#define BT_HCI_VS_SCHED_ROLE_BIG   0x04
++#define BT_HCI_VS_SCHED_ROLE_SCAN  0x05
++#define BT_HCI_VS_SCHED_ROLE_ACL   0x06
++#define BT_HCI_VS_SCHED_ROLE_CIG   0x07
++
++struct bt_hci_vs_sched_entry {
++	uint8_t  ticker_id;
++	uint8_t  role;
++	uint32_t next_us;
++	uint32_t period_us;
++	uint32_t slot_us;
++} __packed;
++
++#define BT_HCI_VS_SCHED_ENTRIES_MAX 16
++
++struct bt_hci_rp_vs_read_schedule {
++	uint8_t status;
++	uint8_t count;
++	struct bt_hci_vs_sched_entry entry[];
++} __packed;
++
+ #define BT_HCI_OP_VS_READ_USB_TRANSPORT_MODE    BT_OP(BT_OGF_VS, 0x0010)
+ 
+ struct bt_hci_rp_vs_read_usb_transport_mode {
+diff --git a/subsys/bluetooth/controller/include/ll.h b/subsys/bluetooth/controller/include/ll.h
+--- a/subsys/bluetooth/controller/include/ll.h
++++ b/subsys/bluetooth/controller/include/ll.h
+@@ -375,3 +375,7 @@
+ 	return 0U;
+ }
+ #endif /* !CONFIG_BT_CTLR_HCI_ADV_HANDLE_MAPPING */
++
++/* Running roles of the ticker for the vendor Read Schedule command; returns how many were filled */
++struct bt_hci_vs_sched_entry;
++uint8_t ll_sched_read(struct bt_hci_vs_sched_entry *entry, uint8_t max);
+diff --git a/subsys/bluetooth/controller/hci/hci.c b/subsys/bluetooth/controller/hci/hci.c
+--- a/subsys/bluetooth/controller/hci/hci.c
++++ b/subsys/bluetooth/controller/hci/hci.c
+@@ -5225,6 +5225,29 @@
+ }
+ #endif /* CONFIG_BT_CTLR_VS_SCAN_REQ_RX */
+ 
++#if defined(CONFIG_BT_TICKER_NEXT_SLOT_GET_MATCH)
++static void vs_read_schedule(struct net_buf *buf, struct net_buf **evt)
++{
++	struct bt_hci_vs_sched_entry entry[BT_HCI_VS_SCHED_ENTRIES_MAX];
++	struct bt_hci_rp_vs_read_schedule *rp;
++	uint8_t count;
++
++	ARG_UNUSED(buf);
++
++	count = ll_sched_read(entry, ARRAY_SIZE(entry));
++	rp = hci_cmd_complete(evt, sizeof(*rp) + count * sizeof(entry[0]));
++	rp->status = 0x00;
++	rp->count = count;
++	for (uint8_t i = 0U; i < count; i++) {
++		rp->entry[i].ticker_id = entry[i].ticker_id;
++		rp->entry[i].role = entry[i].role;
++		rp->entry[i].next_us = sys_cpu_to_le32(entry[i].next_us);
++		rp->entry[i].period_us = sys_cpu_to_le32(entry[i].period_us);
++		rp->entry[i].slot_us = sys_cpu_to_le32(entry[i].slot_us);
++	}
++}
++#endif /* CONFIG_BT_TICKER_NEXT_SLOT_GET_MATCH */
++
+ #if defined(CONFIG_BT_CTLR_TX_PWR_DYNAMIC_CONTROL)
+ static void vs_write_tx_power_level(struct net_buf *buf, struct net_buf **evt)
+ {
+@@ -5796,6 +5819,12 @@
+ 		break;
+ #endif /* CONFIG_BT_CTLR_TX_PWR_DYNAMIC_CONTROL */
+ 
++#if defined(CONFIG_BT_TICKER_NEXT_SLOT_GET_MATCH)
++	case BT_OCF(BT_HCI_OP_VS_READ_SCHEDULE):
++		vs_read_schedule(cmd, evt);
++		break;
++#endif /* CONFIG_BT_TICKER_NEXT_SLOT_GET_MATCH */
++
+ #if defined(CONFIG_BT_CTLR_MIN_USED_CHAN) && defined(CONFIG_BT_PERIPHERAL)
+ 	case BT_OCF(BT_HCI_OP_VS_SET_MIN_NUM_USED_CHANS):
+ 		vs_set_min_used_chans(cmd, evt);
+diff --git a/subsys/bluetooth/controller/CMakeLists.txt b/subsys/bluetooth/controller/CMakeLists.txt
+--- a/subsys/bluetooth/controller/CMakeLists.txt
++++ b/subsys/bluetooth/controller/CMakeLists.txt
+@@ -50,6 +50,10 @@
+     CONFIG_BT_CTLR_ADV_ISO
+     ll_sw/ull_adv_iso.c
+     )
++  zephyr_library_sources_ifdef(
++    CONFIG_BT_TICKER_NEXT_SLOT_GET_MATCH
++    ll_sw/ull_sched_read.c
++    )
+ endif()
+ 
+ if(CONFIG_BT_OBSERVER)
+diff --git a/subsys/bluetooth/controller/ll_sw/ull_sched_read.c b/subsys/bluetooth/controller/ll_sw/ull_sched_read.c
+new file mode 100644
+--- /dev/null
++++ b/subsys/bluetooth/controller/ll_sw/ull_sched_read.c
+@@ -0,0 +1,209 @@
++/*
++ * Copyright (c) 2026 Hubert Włodarczyk
++ *
++ * SPDX-License-Identifier: Apache-2.0
++ */
++
++/* Vendor Read Schedule: the running roles as the ticker has them, for the host to see the real
++ * phases (next event, period, reserved slot) instead of modelling them.
++ */
++
++#include <zephyr/kernel.h>
++#include <zephyr/sys/byteorder.h>
++#include <zephyr/sys/util.h>
++#include <zephyr/bluetooth/hci_types.h>
++#include <zephyr/bluetooth/hci_vs.h>
++
++#include "util/util.h"
++#include "util/mem.h"
++#include "util/memq.h"
++#include "util/mayfly.h"
++#include "util/dbuf.h"
++
++#include "ticker/ticker.h"
++
++#include "hal/ccm.h"
++#include "hal/ticker.h"
++
++#include "pdu_df.h"
++#include "lll/pdu_vendor.h"
++#include "pdu.h"
++
++#include "lll.h"
++#include "lll/lll_vendor.h"
++#include "lll_clock.h"
++#include "lll/lll_df_types.h"
++#include "lll/lll_adv_types.h"
++#include "lll_adv.h"
++#include "lll/lll_adv_pdu.h"
++#include "lll_adv_iso.h"
++#include "lll_scan.h"
++#include "lll_conn.h"
++#include "lll_conn_iso.h"
++#include "lll_iso_tx.h"
++
++#include "ll_sw/ull_tx_queue.h"
++
++#include "isoal.h"
++
++#include "ull_adv_types.h"
++#include "ull_scan_types.h"
++#include "ull_iso_types.h"
++#include "ull_conn_types.h"
++#include "ull_conn_iso_types.h"
++
++#include "ull_internal.h"
++#include "ull_adv_internal.h"
++#include "ull_scan_internal.h"
++#include "ull_conn_internal.h"
++#include "ull_conn_iso_internal.h"
++
++#include "ll.h"
++
++#include "hal/debug.h"
++
++static void op_status_cb(uint32_t status, void *param)
++{
++	*((uint32_t volatile *)param) = status;
++}
++
++/* Role, period and reserved slot of a ticker; false for tickers that are no role (stop timers) */
++static bool role_of(uint8_t id, struct bt_hci_vs_sched_entry *e)
++{
++	const struct ull_hdr *hdr = NULL;
++
++	e->period_us = 0U;
++	if (false) {
++
++#if defined(CONFIG_BT_BROADCASTER)
++	} else if (IN_RANGE(id, TICKER_ID_ADV_BASE, TICKER_ID_ADV_LAST)) {
++		const struct ll_adv_set *adv = ull_adv_set_get(id - TICKER_ID_ADV_BASE);
++
++		e->role = BT_HCI_VS_SCHED_ROLE_ADV;
++		hdr = adv != NULL ? &adv->ull : NULL;
++#if defined(CONFIG_BT_CTLR_ADV_EXT) && (CONFIG_BT_CTLR_ADV_AUX_SET > 0)
++	} else if (IN_RANGE(id, TICKER_ID_ADV_AUX_BASE, TICKER_ID_ADV_AUX_LAST)) {
++		const struct ll_adv_aux_set *aux = ull_adv_aux_get(id - TICKER_ID_ADV_AUX_BASE);
++
++		e->role = BT_HCI_VS_SCHED_ROLE_AUX;
++		if (aux != NULL) {
++			hdr = &aux->ull;
++			e->period_us = aux->interval * PERIODIC_INT_UNIT_US;
++		}
++#if defined(CONFIG_BT_CTLR_ADV_PERIODIC)
++	} else if (IN_RANGE(id, TICKER_ID_ADV_SYNC_BASE, TICKER_ID_ADV_SYNC_LAST)) {
++		const struct ll_adv_sync_set *sync = ull_adv_sync_get(id - TICKER_ID_ADV_SYNC_BASE);
++
++		e->role = BT_HCI_VS_SCHED_ROLE_PA;
++		if (sync != NULL) {
++			hdr = &sync->ull;
++			e->period_us = sync->interval * PERIODIC_INT_UNIT_US;
++		}
++#if defined(CONFIG_BT_CTLR_ADV_ISO)
++	} else if (IN_RANGE(id, TICKER_ID_ADV_ISO_BASE, TICKER_ID_ADV_ISO_LAST)) {
++		const struct ll_adv_iso_set *big = ull_adv_iso_get(id - TICKER_ID_ADV_ISO_BASE);
++
++		e->role = BT_HCI_VS_SCHED_ROLE_BIG;
++		if (big != NULL) {
++			hdr = &big->ull;
++			e->period_us = big->lll.iso_interval * ISO_INT_UNIT_US;
++		}
++#endif /* CONFIG_BT_CTLR_ADV_ISO */
++#endif /* CONFIG_BT_CTLR_ADV_PERIODIC */
++#endif /* CONFIG_BT_CTLR_ADV_EXT && CONFIG_BT_CTLR_ADV_AUX_SET > 0 */
++#endif /* CONFIG_BT_BROADCASTER */
++
++#if defined(CONFIG_BT_OBSERVER)
++	} else if (IN_RANGE(id, TICKER_ID_SCAN_BASE, TICKER_ID_SCAN_LAST)) {
++		const struct ll_scan_set *scan = ull_scan_set_get(id - TICKER_ID_SCAN_BASE);
++
++		e->role = BT_HCI_VS_SCHED_ROLE_SCAN;
++		if (scan != NULL) {
++			hdr = &scan->ull;
++			e->period_us = scan->lll.interval * SCAN_INT_UNIT_US;
++		}
++#endif /* CONFIG_BT_OBSERVER */
++
++#if defined(CONFIG_BT_CONN)
++	} else if (IN_RANGE(id, TICKER_ID_CONN_BASE, TICKER_ID_CONN_LAST)) {
++		const struct ll_conn *conn = ll_conn_get(id - TICKER_ID_CONN_BASE);
++
++		e->role = BT_HCI_VS_SCHED_ROLE_ACL;
++		if (conn != NULL) {
++			hdr = &conn->ull;
++			e->period_us = conn->lll.interval * CONN_INT_UNIT_US;
++		}
++#endif /* CONFIG_BT_CONN */
++
++#if defined(CONFIG_BT_CTLR_CONN_ISO)
++	} else if (IN_RANGE(id, TICKER_ID_CONN_ISO_BASE, TICKER_ID_CONN_ISO_LAST)) {
++		const struct ll_conn_iso_group *cig =
++			ll_conn_iso_group_get_by_id(id - TICKER_ID_CONN_ISO_BASE);
++
++		e->role = BT_HCI_VS_SCHED_ROLE_CIG;
++		if (cig != NULL) {
++			hdr = &cig->ull;
++			e->period_us = cig->iso_interval * ISO_INT_UNIT_US;
++		}
++#endif /* CONFIG_BT_CTLR_CONN_ISO */
++
++	} else {
++		return false;
++	}
++
++	e->slot_us = hdr != NULL ? HAL_TICKER_TICKS_TO_US(hdr->ticks_slot) : 0U;
++
++	return true;
++}
++
++uint8_t ll_sched_read(struct bt_hci_vs_sched_entry *entry, uint8_t max)
++{
++	uint32_t ticks_ref = 0U;
++	uint32_t ticks_ref_prev = 0U;
++	uint8_t retry = UINT8_MAX;
++	uint8_t ticker_id = TICKER_NULL;
++	uint8_t count = 0U;
++
++	while (count < max) {
++		uint32_t volatile ret_cb = TICKER_STATUS_BUSY;
++		uint32_t ticks_to_expire;
++		uint32_t remainder;
++		uint32_t ret;
++
++		ret = ticker_next_slot_get_ext(TICKER_INSTANCE_ID_CTLR, TICKER_USER_ID_THREAD,
++					       &ticker_id, &ticks_ref, &ticks_to_expire,
++					       &remainder, NULL, NULL, NULL, op_status_cb,
++					       (void *)&ret_cb);
++		if (ret == TICKER_STATUS_BUSY) {
++			while (ret_cb == TICKER_STATUS_BUSY) {
++				ticker_job_sched(TICKER_INSTANCE_ID_CTLR, TICKER_USER_ID_THREAD);
++			}
++		}
++
++		if (ret_cb != TICKER_STATUS_SUCCESS || ticker_id == TICKER_NULL) {
++			break;
++		}
++
++		/* Tickers expired while iterating: start over from the new reference */
++		if (count > 0U && ticks_ref != ticks_ref_prev) {
++			if (--retry == 0U) {
++				break;
++			}
++
++			ticker_id = TICKER_NULL;
++			count = 0U;
++			continue;
++		}
++
++		ticks_ref_prev = ticks_ref;
++		entry[count].ticker_id = ticker_id;
++		if (!role_of(ticker_id, &entry[count])) {
++			continue;
++		}
++
++		entry[count].next_us = HAL_TICKER_TICKS_TO_US(ticks_to_expire);
++		count++;
++	}
++
++	return count;
++}

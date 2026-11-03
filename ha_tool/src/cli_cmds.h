@@ -58,6 +58,7 @@ int cmd_le_source_stop(const struct shell *sh, size_t argc, char **argv);
 int cmd_le_source_status(const struct shell *sh, size_t argc, char **argv);
 int cmd_mode(const struct shell *sh, size_t argc, char **argv);
 int cmd_help(const struct shell *sh, size_t argc, char **argv);
+int cmd_radio_schedule(const struct shell *sh, size_t argc, char **argv);
 int cmd_version(const struct shell *sh, size_t argc, char **argv);
 int cmd_status(const struct shell *sh, size_t argc, char **argv);
 int cmd_reset(const struct shell *sh, size_t argc, char **argv);

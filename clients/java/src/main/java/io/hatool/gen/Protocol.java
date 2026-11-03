@@ -258,6 +258,7 @@ public final class Protocol {
                 "vcp", "bool"));
         m.put("mode", map("mode", "str"));
         m.put("help", map("commands", "int"));
+        m.put("radio schedule", map("count", "int", "overlaps", "int", "window_us", "int"));
         m.put("version", map("app", "str", "version", "str", "zephyr", "str", "proto", "int"));
         m.put("status", map(
                 "mode", "str",
@@ -437,6 +438,7 @@ public final class Protocol {
         m.put("le-source status", "le-source status");
         m.put("mode", "mode");
         m.put("help", "help");
+        m.put("radio schedule", "radio schedule");
         m.put("version", "version");
         m.put("status", "status");
         m.put("reset", "reset");

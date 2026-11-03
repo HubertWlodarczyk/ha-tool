@@ -9,6 +9,7 @@
 #include <zephyr/bluetooth/hci.h>
 #include <zephyr/bluetooth/hci_vs.h>
 #include <zephyr/sys/byteorder.h>
+#include <zephyr/sys/util.h>
 
 #include "hci_util.h"
 
@@ -75,4 +76,34 @@ int hci_set_tx_power(uint8_t handle_type, uint16_t handle, int8_t dbm, int8_t *s
 	}
 
 	return err;
+}
+
+int hci_read_schedule(struct bt_hci_vs_sched_entry *out, size_t max)
+{
+	const struct bt_hci_rp_vs_read_schedule *rp;
+	struct net_buf *rsp = NULL;
+	int n;
+
+	n = bt_hci_cmd_send_sync(BT_HCI_OP_VS_READ_SCHEDULE, NULL, &rsp);
+	if (n == 0) {
+		rp = (const void *)rsp->data;
+		if (rp->status != 0 || rsp->len < sizeof(*rp) + rp->count * sizeof(rp->entry[0])) {
+			n = -EIO;
+		} else {
+			n = MIN(rp->count, max);
+			for (int i = 0; i < n; i++) {
+				out[i].ticker_id = rp->entry[i].ticker_id;
+				out[i].role = rp->entry[i].role;
+				out[i].next_us = sys_le32_to_cpu(rp->entry[i].next_us);
+				out[i].period_us = sys_le32_to_cpu(rp->entry[i].period_us);
+				out[i].slot_us = sys_le32_to_cpu(rp->entry[i].slot_us);
+			}
+		}
+	}
+
+	if (rsp != NULL) {
+		net_buf_unref(rsp);
+	}
+
+	return n;
 }

@@ -324,6 +324,12 @@ commands:
   reply: {commands: int}
   data:
     HELP: {cmd: str, usage: str, doc: str}
+- cmd: radio schedule
+  doc: 'Running roles of the controller (vendor Read Schedule, Zephyr patch 0013): next event, period
+    and reserved slot of each, and reservations that overlap within 60 ms; proto human: a timeline'
+  reply: {count: int, overlaps: int, window_us: int}
+  data:
+    SLOT: {role: str, id: int, next_us: int, period_us: int, slot_us: int}
 - cmd: version
   doc: Firmware version
   reply: {app: str, version: str, zephyr: str, proto: int}

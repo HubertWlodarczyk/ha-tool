@@ -519,6 +519,14 @@ Reply: `commands` (int)
 
 Data `HELP`: `cmd` (str), `usage` (str), `doc` (str)
 
+### `radio schedule`
+
+Running roles of the controller (vendor Read Schedule, Zephyr patch 0013): next event, period and reserved slot of each, and reservations that overlap within 60 ms; proto human: a timeline
+
+Reply: `count` (int), `overlaps` (int), `window_us` (int)
+
+Data `SLOT`: `role` (str), `id` (int), `next_us` (int), `period_us` (int), `slot_us` (int)
+
 ### `version`
 
 Firmware version

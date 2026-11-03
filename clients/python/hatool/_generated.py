@@ -90,6 +90,7 @@ REPLIES: dict[str, dict[str, str]] = {'bonding create': {'id': 'int', 'name': 's
                       'vcp': 'bool'},
  'mode': {'mode': 'str'},
  'help': {'commands': 'int'},
+ 'radio schedule': {'count': 'int', 'overlaps': 'int', 'window_us': 'int'},
  'version': {'app': 'str', 'version': 'str', 'zephyr': 'str', 'proto': 'int'},
  'status': {'mode': 'str',
             'identity': 'str',
@@ -224,6 +225,11 @@ DATA: dict[str, dict[str, dict[str, str]]] = {'bonding list': {'IDENTITY': {'id'
  'bonding scan': {'DEVICE': {'addr': 'addr', 'name': 'str', 'rssi': 'int'}},
  'bonding connect': {'DEVICE': {'addr': 'addr', 'name': 'str', 'rssi': 'int'}},
  'help': {'HELP': {'cmd': 'str', 'usage': 'str', 'doc': 'str'}},
+ 'radio schedule': {'SLOT': {'role': 'str',
+                             'id': 'int',
+                             'next_us': 'int',
+                             'period_us': 'int',
+                             'slot_us': 'int'}},
  'limits': {'LC3': {'cfg': 'str',
                     'rate': 'int',
                     'frame_us': 'int',
@@ -433,6 +439,7 @@ WIRES: dict[str, str] = {'bonding create': 'bonding create',
  'le-source status': 'le-source status',
  'mode': 'mode',
  'help': 'help',
+ 'radio schedule': 'radio schedule',
  'version': 'version',
  'status': 'status',
  'reset': 'reset',
@@ -921,6 +928,21 @@ class _LeSource:
         return self._c.call("le-source status", [], {}, timeout=reply_timeout)
 
 
+class _Radio:
+    """radio commands"""
+
+    def __init__(self, client):
+        self._c = client
+
+    def schedule(self, *, reply_timeout: float = 10.0) -> Reply:
+        """Running roles of the controller (vendor Read Schedule, Zephyr patch 0013): next event,
+        period and reserved slot of each, and reservations that overlap within 60 ms; proto human: a
+        timeline
+        Reply: count (int), overlaps (int), window_us (int)
+        """
+        return self._c.call("radio schedule", [], {}, timeout=reply_timeout)
+
+
 class _Evt:
     """evt commands"""
 
@@ -1386,6 +1408,7 @@ class Commands:
         self._c = client
         self.bonding = _Bonding(client)
         self.le_source = _LeSource(client)
+        self.radio = _Radio(client)
         self.evt = _Evt(client)
         self.cli = _Cli(client)
         self.broadcast = _Broadcast(client)

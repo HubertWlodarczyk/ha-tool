@@ -102,6 +102,7 @@ Zephyr patches (re-apply them after every `west update`: `west patch apply`, or
 | `0010-vocs-client-drop-conn-on-disconnect` | **Host bug**: the volume controller reset itself on a disconnection, but the VOCS (balance) clients it discovered kept their reference to the connection. The connection object was never freed, so after a session with volume control `bonding disconnect X` + `bonding connect X` failed with `-EINVAL` until reboot. VOCS now drops it on disconnection, like AICS. |
 | `0011-vcp-vol-ctlr-retry-with-read-counter` | **Host bug**: after an "Invalid Change Counter" error the volume controller re-read the state but retried with the stale counter, so the retry failed too. It learns the counter only from notifications, so every volume command failed once the hearing aid's counter had moved: after any reconnection, or on a hearing aid whose volume had been changed before (the usual case with real hearing aids). |
 | `0012-controller-big-create-release-streams-on-error` | **Controller bug**: LE Create BIG reserved the BIS streams before its last check (the event must fit the ISO interval next to the advertising slots) and did not return them when that check refused the BIG. Two refused 8-BIS BIGs used up the pool of 16, and every later BIG failed with Memory Capacity Exceeded until reset. |
+| `0013-controller-vs-read-schedule` | **New vendor command** `Read Schedule`: every running role as the controller's ticker has it (next event, period, reserved slot). `radio schedule` shows the real phases (proto human: a 60 ms timeline) and counts overlapping reservations, instead of the tool only modelling them. |
 
 All of them are suitable for upstream submission.
 
@@ -218,6 +219,7 @@ separate channel: RTT on hardware, stdout in simulation.
 | `stop` | Stops all radio activity of the current mode (connections or BIGs); the configuration stays. |
 | `reset [--yes]` | Everything from scratch: no mode, no identities, bonds or broadcasts. Requires `--yes` in `proto human`. |
 | `help [<words>]` | Commands with usage and description (everything, a group or one command). |
+| `radio schedule` | The controller's running roles (BIG, PA, AUX, ADV, ACL, CIG, scan) with next event, period and reserved slot (`SLOT` lines), and how many reservations of scheduled roles overlap within 60 ms; proto human: a timeline (Zephyr patch 0013). |
 | `limits`, `id`, `time`, `version` | Limits of this firmware build, chip ID, uptime, version. |
 | `evt off <name>...`, `evt on [<name>...]`, `evt list` | Event filter: filtered events are neither printed nor queued. `reset` clears the filter. |
 | `cli spec`, `cli stats`, `cli burst [n=]` | Command table; truncated lines and dropped events; event queue diagnostics. |

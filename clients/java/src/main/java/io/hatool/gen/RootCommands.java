@@ -17,6 +17,7 @@ public abstract class RootCommands {
     public abstract Reply call(String command, List<Object> args, Map<String, Object> keys);
     private final BondingCommands bonding;
     private final LeSourceCommands leSource;
+    private final RadioCommands radio;
     private final EvtCommands evt;
     private final CliCommands cli;
     private final BroadcastCommands broadcast;
@@ -26,6 +27,7 @@ public abstract class RootCommands {
     protected RootCommands() {
         bonding = new BondingCommands(this);
         leSource = new LeSourceCommands(this);
+        radio = new RadioCommands(this);
         evt = new EvtCommands(this);
         cli = new CliCommands(this);
         broadcast = new BroadcastCommands(this);
@@ -39,6 +41,11 @@ public abstract class RootCommands {
     /** 'le-source' commands */
     public LeSourceCommands leSource() {
         return leSource;
+    }
+
+    /** 'radio' commands */
+    public RadioCommands radio() {
+        return radio;
     }
 
     /** 'evt' commands */

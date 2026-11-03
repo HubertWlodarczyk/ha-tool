@@ -9,6 +9,7 @@ project(ha_tool)
 target_sources(app PRIVATE
   src/main.c
   src/sys_cmds.c
+  src/radio_cmds.c
   src/human_evt.c
   src/cli_table.c
   src/dev.c
